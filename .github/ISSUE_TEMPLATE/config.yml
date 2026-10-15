@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Pas de compte GitHub ? Écrire par e-mail
+    url: mailto:vapfrenchtec@gmail.com?subject=VAP%20Convertisseur%20-%20suggestion%20%2F%20bug
+    about: Décrivez le problème et joignez le fichier .DAT concerné.
+  - name: Soutenir le projet (don PayPal)
+    url: https://www.paypal.com/paypalme/VAPTechnologie
+    about: Le convertisseur est gratuit ; un don aide à le faire évoluer.

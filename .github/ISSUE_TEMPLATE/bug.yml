@@ -1,0 +1,38 @@
+name: Signaler un bug
+description: Un réglage mal converti, un message d'erreur, un plantage…
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: Merci de prendre le temps de signaler ce problème. Plus il y a de détails, plus il sera corrigé vite.
+  - type: textarea
+    id: probleme
+    attributes:
+      label: Que s'est-il passé ?
+      description: Ce que vous avez fait, ce que vous attendiez, et ce qui s'est passé à la place.
+    validations:
+      required: true
+  - type: input
+    id: machine
+    attributes:
+      label: Quelle machine ?
+      placeholder: "ex. Mini 24 40 W, Fusion M2 40, Zing 24…"
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version du convertisseur
+      description: Affichée en bas à gauche de la fenêtre.
+      placeholder: "ex. V1.4"
+  - type: dropdown
+    id: langue
+    attributes:
+      label: Langue utilisée
+      options: [Français, English, Español, Deutsch, Italiano, Português, Nederlands, 中文, 日本語]
+  - type: textarea
+    id: fichiers
+    attributes:
+      label: Fichiers
+      description: Glissez ici le fichier .DAT concerné (zippez-le si GitHub le refuse) et, si possible, une capture d'écran.

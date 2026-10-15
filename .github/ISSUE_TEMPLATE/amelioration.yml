@@ -1,0 +1,22 @@
+name: Proposer une amélioration
+description: Une machine à ajouter, un réglage à reprendre, une idée pour le programme…
+title: "[Idée] "
+labels: ["amélioration"]
+body:
+  - type: textarea
+    id: idee
+    attributes:
+      label: Votre idée
+      description: Ce que vous aimeriez que le convertisseur fasse.
+    validations:
+      required: true
+  - type: textarea
+    id: pourquoi
+    attributes:
+      label: Pourquoi ce serait utile
+      description: Dans quelle situation vous en auriez besoin.
+  - type: input
+    id: machine
+    attributes:
+      label: Machine concernée (si besoin)
+      placeholder: "ex. FiberMark, Helix 75 W…"
