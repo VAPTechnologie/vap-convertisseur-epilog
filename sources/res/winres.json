@@ -1,0 +1,27 @@
+{
+  "RT_GROUP_ICON": {
+    "#1": { "0000": "vap.ico" }
+  },
+  "RT_MANIFEST": {
+    "#1": { "0409": "app.manifest" }
+  },
+  "RT_VERSION": {
+    "#1": {
+      "0000": {
+        "fixed": { "file_version": "1.4.0.0", "product_version": "1.4.0.0" },
+        "info": {
+          "040C": {
+            "CompanyName": "VAP",
+            "FileDescription": "VAP - Convertisseur .DAT vers JobManager",
+            "FileVersion": "1.4.0",
+            "InternalName": "VAP Convertisseur .DAT vers JobManager",
+            "LegalCopyright": "(c) 2026 VAP Technologie",
+            "OriginalFilename": "VAP Convertisseur Epilog.exe",
+            "ProductName": "VAP Convertisseur Epilog",
+            "ProductVersion": "1.4.0"
+          }
+        }
+      }
+    }
+  }
+}
