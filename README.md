@@ -24,6 +24,42 @@ Gratuit · Windows 10 et 11 · 9 langues · aucune installation
 
 La notice complète est dans le programme (bouton « Notice / procédure »). Vos fichiers d'origine ne sont jamais modifiés.
 
+> [!WARNING]
+> **Avant d'utiliser un réglage converti en production**
+> - Gardez intacte la sauvegarde de Job Manager faite à l'étape 1 : c'est votre retour arrière.
+> - Contrôlez chaque réglage sur la machine et le matériau concernés, avant toute production : puissance, vitesse, fréquence, source CO2 ou Fibre, nombre de passes.
+> - L'assistance d'air est imposée sur Marche pour toutes les découpes, par sécurité.
+> - Un réglage laser incorrect peut abîmer la pièce ou provoquer un départ de feu : ne laissez jamais la machine sans surveillance.
+
+## Machines vérifiées
+
+Chaque valeur convertie a été contrôlée dans Job Manager, réglage par réglage, avec les pilotes Epilog d'origine.
+
+| Machine | Réglages contrôlés | État |
+|---|---|---|
+| Mini (Mini 24) | 98 réglages + réglages de test du pilote | ✅ vérifiée |
+| Helix | 80 réglages | ✅ vérifiée |
+| Zing | 82 réglages + réglages de test du pilote | ✅ vérifiée |
+| Fusion (CO2 et Fibre) | 67 réglages + réglages de test du pilote | ✅ vérifiée |
+| Mini+, Zing+, Fusion+ | — | ⚠️ non vérifiée (pas de fichier .DAT disponible) |
+
+Vous avez une machine non vérifiée ? Vos fichiers .DAT nous aideraient : écrivez à **vapfrenchtec@gmail.com**.
+
+## Questions fréquentes
+
+**Windows affiche « Windows a protégé votre ordinateur ».**
+Le programme est gratuit et n'a pas de signature payante, donc Windows ne le connaît pas. Cliquez sur « Informations complémentaires », puis sur « Exécuter quand même ».
+
+**Mon antivirus se méfie du fichier.**
+Comparez l'empreinte SHA-256 du fichier téléchargé avec celle indiquée sur la page de la version. Dans PowerShell :
+`Get-FileHash -Algorithm SHA256 "VAP.Convertisseur.Epilog.exe"`
+
+**Comment revenir en arrière ?**
+Dans Job Manager, restaurez la sauvegarde faite à l'étape 1 (« Restore Database »). Le convertisseur ne modifie jamais cette sauvegarde : il crée une nouvelle base à côté.
+
+**Un réglage converti ne correspond pas à l'ancien.**
+Signalez-le (voir plus bas) en joignant le fichier .DAT : nous corrigerons le convertisseur.
+
 ## Ce qui est repris
 
 Puissance, vitesse, résolution, fréquence, type de travail, trame, sens de gravure, autofocus, tri des vecteurs, mode Tampon et 3D, position du travail, gestion des couleurs, nombre de passes, et pour la Fusion : source Fibre, épaisseur et décalage, compensations et grille de découpe. L'assistance d'air est mise sur Marche pour toutes les découpes.
