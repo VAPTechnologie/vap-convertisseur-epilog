@@ -189,12 +189,13 @@ const (
 	pbmSetPos      = 0x0402
 	pbmSetBarColor = 0x0409
 
-	mbOK          = 0x0
-	mbYesNo       = 0x4
-	mbIconError   = 0x10
-	mbIconWarning = 0x30
-	mbIconInfo    = 0x40
-	idYes         = 6
+	mbOK           = 0x0
+	mbYesNo        = 0x4
+	mbIconError    = 0x10
+	mbIconQuestion = 0x20
+	mbIconWarning  = 0x30
+	mbIconInfo     = 0x40
+	idYes          = 6
 
 	dtLeft       = 0x0
 	dtVCenter    = 0x4
@@ -751,6 +752,23 @@ func (a *app) countDats(autoLaser bool) {
 	}
 }
 
+// fixDatDir : si le dossier choisi est un dossier de résultat, propose le dossier source.
+func (a *app) fixDatDir() {
+	dir := strings.TrimSpace(getText(a.ctl[idDatEdit]))
+	if dir == "" {
+		return
+	}
+	src := SourceDirFor(dir, a.checked(idRecursive))
+	if src == "" {
+		return
+	}
+	ps, _ := ListDats(src, a.checked(idRecursive))
+	if msgBox(a.hwnd, Tf("ask.useSource", dir, len(ps), src), T("msg.title"), mbYesNo|mbIconQuestion) == idYes {
+		setText(a.ctl[idDatEdit], src)
+		a.countDats(true)
+	}
+}
+
 func tokens(s string) map[string]bool {
 	t := map[string]bool{}
 	for _, w := range strings.FieldsFunc(foldKey(s), func(r rune) bool { return !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '+') }) {
@@ -806,9 +824,15 @@ func (a *app) loadBackup(path string) {
 		return
 	}
 	ms, err := LoadMachines(db)
+	if err != nil {
+		db.Close()
+		msgBox(a.hwnd, T("err.notBackup")+err.Error(), T("msg.title"), mbIconError)
+		return
+	}
+	err = CheckSchema(db)
 	db.Close()
 	if err != nil {
-		msgBox(a.hwnd, T("err.notBackup")+err.Error(), T("msg.title"), mbIconError)
+		msgBox(a.hwnd, err.Error(), T("msg.title"), mbIconError)
 		return
 	}
 	if len(ms) == 0 {
@@ -827,6 +851,7 @@ func (a *app) convert() {
 	if a.busy {
 		return
 	}
+	a.fixDatDir()
 	dir := strings.TrimSpace(getText(a.ctl[idDatEdit]))
 	bk := strings.TrimSpace(getText(a.ctl[idBkEdit]))
 	folder := strings.TrimSpace(getText(a.ctl[idFolderName]))
@@ -949,6 +974,7 @@ func (a *app) onCommand(id int, code int) {
 		if p, ok := pickPath(a.hwnd, true, T("dlg.datTitle"), start, nil); ok {
 			setText(a.ctl[idDatEdit], p)
 			a.countDats(true)
+			a.fixDatDir()
 			if len(a.machines) > 0 {
 				a.selectMachine(a.bestMachine())
 			}
@@ -1133,6 +1159,7 @@ func main() {
 			if st.IsDir() {
 				setText(a.ctl[idDatEdit], os.Args[1])
 				a.countDats(true)
+				a.fixDatDir()
 			} else if strings.EqualFold(filepath.Ext(os.Args[1]), ".epidb") {
 				setText(a.ctl[idBkEdit], os.Args[1])
 				a.loadBackup(os.Args[1])

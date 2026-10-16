@@ -688,8 +688,63 @@ func ensureSubfolders(db DB) map[int]int64 {
 	return ids
 }
 
+// Tables et colonnes de la sauvegarde utilisées par la conversion.
+var requiredSchema = []struct {
+	Table string
+	Cols  []string
+}{
+	{"Machines", []string{"ID", "Name", "LaserType", "TableSize", "SortID"}},
+	{"MaterialFolders", []string{"ID", "SortID", "Name", "Subfolders", "MachineID", "ForJobSettings"}},
+	{"MaterialSubfolders", []string{"ID", "SortID", "Name"}},
+	{"Settings", []string{"ID", "Category", "ColorSettings", "CreationDate", "GlobalSettings", "MachineID", "Name", "Notes",
+		"PrintDate", "SortID", "SubCategory", "OriginalColorSettings", "FolderID", "SubFolderID", "ProcessSettings",
+		"OriginalProcessSettings", "EpilogProvided"}},
+}
+
+// MissingSchema : tables ("Table") et colonnes ("Table.Colonne") absentes de la sauvegarde.
+func MissingSchema(db DB) ([]string, error) {
+	var missing []string
+	for _, t := range requiredSchema {
+		rows, err := db.Query(`PRAGMA table_info(` + t.Table + `)`)
+		if err != nil {
+			return nil, err
+		}
+		if len(rows) == 0 {
+			missing = append(missing, t.Table)
+			continue
+		}
+		have := map[string]bool{}
+		for _, r := range rows {
+			if len(r) > 1 {
+				have[strings.ToLower(toStr(r[1]))] = true
+			}
+		}
+		for _, c := range t.Cols {
+			if !have[strings.ToLower(c)] {
+				missing = append(missing, t.Table+"."+c)
+			}
+		}
+	}
+	return missing, nil
+}
+
+// CheckSchema : erreur explicite si la sauvegarde n'a pas la structure attendue.
+func CheckSchema(db DB) error {
+	missing, err := MissingSchema(db)
+	if err != nil {
+		return err
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf(T("err.schema"), strings.Join(missing, ", "))
+	}
+	return nil
+}
+
 func Convert(db DB, o Options, logf func(string), progress func(done, total int)) (Result, error) {
 	var res Result
+	if err := CheckSchema(db); err != nil {
+		return res, err
+	}
 	paths, err := ListDats(o.DatDir, o.Recursive)
 	if err != nil {
 		return res, fmt.Errorf(T("err.readDir"), err)
@@ -1030,6 +1085,29 @@ func OutputDir(datDir string) string {
 		}
 		p = filepath.Join(parent, fmt.Sprintf("%s (%d)", base, i))
 	}
+}
+
+var reCopyNum = regexp.MustCompile(` \(\d+\)$`)
+
+// SourceDirFor : si dir est un dossier de résultat sans .DAT (suffixe de sortie,
+// dans n'importe quelle langue, éventuellement suivi de « (2) »…), renvoie le
+// dossier source voisin s'il contient des .DAT ; sinon "".
+func SourceDirFor(dir string, recursive bool) string {
+	dir = filepath.Clean(dir)
+	if ps, err := ListDats(dir, recursive); err != nil || len(ps) > 0 {
+		return ""
+	}
+	base := reCopyNum.ReplaceAllString(filepath.Base(dir), "")
+	for _, suf := range tr["out.suffix"] {
+		if suf == "" || len(base) <= len(suf) || !strings.EqualFold(base[len(base)-len(suf):], suf) {
+			continue
+		}
+		src := filepath.Join(filepath.Dir(dir), base[:len(base)-len(suf)])
+		if ps, err := ListDats(src, recursive); err == nil && len(ps) > 0 {
+			return src
+		}
+	}
+	return ""
 }
 
 func safeFileName(s string) string {

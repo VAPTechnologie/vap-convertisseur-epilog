@@ -7,6 +7,8 @@ package main
 import (
 	"errors"
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -72,4 +74,45 @@ func TestRapport(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Log(p)
+}
+
+// Sauvegarde réelle sans la colonne Settings.Category (erreur du 16/10/2026) :
+//
+//	set VAP_BACKUP=<sauvegarde .epidb normale>  &  go test -run TestSchemaSauvegarde -v
+func TestSchemaSauvegarde(t *testing.T) {
+	bk := os.Getenv("VAP_BACKUP")
+	if bk == "" {
+		t.Skip("VAP_BACKUP non défini")
+	}
+	cur = LFR
+	db, err := openRO(bk)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = CheckSchema(db)
+	db.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cp := filepath.Join(t.TempDir(), "sans Category.epidb")
+	if err := CopyFile(bk, cp); err != nil {
+		t.Fatal(err)
+	}
+	if db, err = openRW(cp); err != nil {
+		t.Fatal(err)
+	}
+	err = db.Exec(`ALTER TABLE Settings DROP COLUMN Category`)
+	db.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if db, err = openRO(cp); err != nil {
+		t.Fatal(err)
+	}
+	err = CheckSchema(db)
+	db.Close()
+	if err == nil || !strings.Contains(err.Error(), "Settings.Category") || !strings.Contains(err.Error(), "Refaites une sauvegarde") {
+		t.Fatalf("contrôle : %v", err)
+	}
+	t.Log(err)
 }
