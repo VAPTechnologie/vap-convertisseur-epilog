@@ -24,6 +24,9 @@ type sqliteLib struct {
 
 var sqlib *sqliteLib
 
+// DLL SQLite effectivement chargée (indiquée dans le rapport d'erreur)
+var sqliteDLL *syscall.LazyDLL
+
 func loadSQLite() (*sqliteLib, error) {
 	if sqlib != nil {
 		return sqlib, nil
@@ -61,7 +64,7 @@ func loadSQLite() (*sqliteLib, error) {
 			return nil, fmt.Errorf(T("err.sqliteIncomplete"), err)
 		}
 	}
-	sqlib = l
+	sqlib, sqliteDLL = l, dll
 	return l, nil
 }
 

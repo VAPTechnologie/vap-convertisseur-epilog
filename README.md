@@ -4,7 +4,7 @@
 
 Vos anciens réglages Epilog (fichiers **.DAT** des anciens pilotes) passent dans **Epilog Job Manager** en un clic, déjà rangés par machine, sans rien ressaisir.
 
-**[⬇ Télécharger la dernière version (V1.4)](../../releases/latest)**
+**[⬇ Télécharger la dernière version (V1.5)](../../releases/latest)**
 
 Gratuit · Windows 10 et 11 · 9 langues · aucune installation
 
@@ -69,6 +69,8 @@ Le détail des versions est dans [NOTES_DE_VERSION.md](NOTES_DE_VERSION.md).
 ## Un problème ou une idée ?
 
 Cliquez sur « Suggestion / bug » dans le convertisseur, ou ouvrez l'onglet **[Issues](../../issues/new/choose)**. Joignez si possible le fichier .DAT concerné.
+
+Si la conversion a échoué, joignez aussi le fichier « rapport d'erreur.txt » créé à côté du dossier des .DAT : il permet de trouver la cause sans votre sauvegarde complète.
 
 Pas de compte GitHub ? Écrivez à **vapfrenchtec@gmail.com**.
 ## Soutenir le projet

@@ -1,0 +1,3 @@
+# Programme compilé et ressources générées par go-winres
+*.exe
+*.syso

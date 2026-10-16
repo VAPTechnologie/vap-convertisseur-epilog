@@ -381,7 +381,8 @@ type app struct {
 	ctl                                  map[int]uintptr
 	machines                             []Machine
 	outDir                               string
-	busy                                 bool
+	report                               string // dernier rapport d'erreur écrit
+	busy                               bool
 	sections                             []section
 	titleRight, footerRight              int  // limites des textes dessinés (unités logiques)
 	inWelcome, welcomeOnly               bool // journal = seulement le message d'accueil
@@ -641,7 +642,7 @@ func (a *app) layout() {
 	mv(idQuit, right-qw, by, qw, 34)
 	mv(idConvert, right-qw-12-cvw, by, cvw, 34)
 	mv(idOpen, right-qw-12-cvw-12-ow, by, ow, 34)
-	// bouton de don juste après « VAP V1.4 », en bas à gauche
+	// bouton de don juste après « VAP V1.5 », en bas à gauche
 	sigW := a.measure(a.fontSmall, appSignature)
 	dw := max(110, tw("btn.donate")+32)
 	mv(idDonate, m+sigW+14, by, dw, 34)
@@ -900,7 +901,17 @@ func (a *app) convert() {
 	if err != nil {
 		send(a.ctl[idProgress], pbmSetPos, 0, 0)
 		a.log(T("log.fail") + err.Error())
-		msgBox(a.hwnd, T("err.convFailed")+err.Error(), T("msg.title"), mbIconError)
+		rp, rerr := WriteReport(openRO, ReportInput{Version: appVersion(), System: reportSystem(),
+			Backup: bk, Options: o, Log: getText(a.ctl[idLog]), Err: err})
+		if rerr != nil {
+			msgBox(a.hwnd, T("err.convFailed")+err.Error(), T("msg.title"), mbIconError)
+			return
+		}
+		a.report = rp
+		a.log(T("log.report") + rp)
+		if msgBox(a.hwnd, T("err.convFailed")+err.Error()+Tf("ask.sendReport", rp), T("msg.title"), mbYesNo|mbIconError) == idYes {
+			a.sendSuggestion()
+		}
 		return
 	}
 	send(a.ctl[idProgress], pbmSetPos, 100, 0)
@@ -979,8 +990,22 @@ func (a *app) onCommand(id int, code int) {
 	case idDonate:
 		pShellExecuteW.Call(a.hwnd, wp("open"), wp(donateURL), 0, 0, 1)
 	case idSuggest:
-		pShellExecuteW.Call(a.hwnd, wp("open"), wp(suggestMailto()), 0, 0, 1)
+		a.sendSuggestion()
 	}
+}
+
+// sendSuggestion : adresse copiée et explications ; s'il y a eu une erreur,
+// l'explorateur s'ouvre aussi sur le rapport à joindre.
+func (a *app) sendSuggestion() {
+	report := ""
+	if a.report != "" {
+		if _, err := os.Stat(a.report); err == nil {
+			report = a.report
+			pShellExecuteW.Call(a.hwnd, wp("open"), wp("explorer.exe"), wp(`/select,"`+report+`"`), 0, 1)
+		}
+	}
+	copyToClipboard(a.hwnd, suggestMail)
+	msgBox(a.hwnd, suggestText(report), T("msg.title"), mbOK|mbIconInfo)
 }
 
 func wndProc(hwnd, msg, wParam, lParam uintptr) uintptr {
@@ -1229,7 +1254,7 @@ func pickClassic(owner uintptr, folder bool, title, start string, filters [][2]s
 // Langue : choix mémorisé dans %APPDATA%\VAP Convertisseur\langue.txt,
 // sinon langue de Windows (anglais si elle n'est pas proposée).
 
-const appSignature = "VAP  V1.4"
+const appSignature = "VAP  V1.5"
 
 func langFile() string {
 	d, err := os.UserConfigDir()
