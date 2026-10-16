@@ -448,11 +448,18 @@ var tr = map[string][nLang]string{
 		"rapport d'erreur.txt", "error report.txt", "informe de error.txt", "Fehlerbericht.txt", "rapporto di errore.txt",
 		"relatório de erro.txt", "foutrapport.txt", "错误报告.txt", "エラーレポート.txt",
 	},
-	"mail.reportSubject": {
-		"rapport d'erreur", "error report", "informe de error", "Fehlerbericht", "rapporto di errore",
-		"relatório de erro", "foutrapport", "错误报告", "エラーレポート",
+	"msg.sendMail": {
+		"Écrivez à %s depuis votre messagerie habituelle (Gmail, Outlook…).\nL'adresse a été copiée : collez-la avec Ctrl+V dans le destinataire.",
+		"Write to %s from your usual e-mail (Gmail, Outlook…).\nThe address has been copied: paste it with Ctrl+V into the recipient field.",
+		"Escriba a %s desde su correo habitual (Gmail, Outlook…).\nLa dirección se ha copiado: péguela con Ctrl+V en el destinatario.",
+		"Schreiben Sie an %s aus Ihrem gewohnten E-Mail-Programm (Gmail, Outlook…).\nDie Adresse wurde kopiert: mit Strg+V als Empfänger einfügen.",
+		"Scriva a %s dalla sua posta abituale (Gmail, Outlook…).\nL'indirizzo è stato copiato: lo incolli con Ctrl+V nel destinatario.",
+		"Escreva para %s a partir do seu e-mail habitual (Gmail, Outlook…).\nO endereço foi copiado: cole-o com Ctrl+V no destinatário.",
+		"Schrijf naar %s vanuit uw gebruikelijke e-mail (Gmail, Outlook…).\nHet adres is gekopieerd: plak het met Ctrl+V bij de ontvanger.",
+		"请通过您常用的邮箱（Gmail、Outlook…）写信至 %s。\n地址已复制：在收件人栏按 Ctrl+V 粘贴。",
+		"いつものメール（Gmail、Outlook など）から %s に送信してください。\nアドレスはコピー済みです：宛先に Ctrl+V で貼り付けてください。",
 	},
-	"mail.report": {
+	"msg.attachReport": {
 		"Merci de joindre le rapport d'erreur « %s » (il vient d'être sélectionné dans l'explorateur).",
 		"Please attach the error report \"%s\" (it has just been selected in Explorer).",
 		"Adjunte el informe de error «%s» (acaba de seleccionarse en el Explorador).",

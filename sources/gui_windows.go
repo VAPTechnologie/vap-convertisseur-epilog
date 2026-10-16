@@ -994,8 +994,8 @@ func (a *app) onCommand(id int, code int) {
 	}
 }
 
-// sendSuggestion : e-mail préparé ; s'il y a eu une erreur, l'explorateur
-// s'ouvre aussi sur le rapport pour le joindre (mailto ne permet pas de pièce jointe).
+// sendSuggestion : adresse copiée et explications ; s'il y a eu une erreur,
+// l'explorateur s'ouvre aussi sur le rapport à joindre.
 func (a *app) sendSuggestion() {
 	report := ""
 	if a.report != "" {
@@ -1004,7 +1004,8 @@ func (a *app) sendSuggestion() {
 			pShellExecuteW.Call(a.hwnd, wp("open"), wp("explorer.exe"), wp(`/select,"`+report+`"`), 0, 1)
 		}
 	}
-	pShellExecuteW.Call(a.hwnd, wp("open"), wp(suggestMailto(report)), 0, 0, 1)
+	copyToClipboard(a.hwnd, suggestMail)
+	msgBox(a.hwnd, suggestText(report), T("msg.title"), mbOK|mbIconInfo)
 }
 
 func wndProc(hwnd, msg, wParam, lParam uintptr) uintptr {
