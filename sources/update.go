@@ -1,0 +1,86 @@
+package main
+
+// Recherche d'une version plus récente sur GitHub (dernière release publiée).
+// Aucune donnée n'est envoyée ; en cas d'échec, rien n'est signalé.
+
+import (
+	"encoding/json"
+	"errors"
+	"net/http"
+	"strconv"
+	"strings"
+	"time"
+)
+
+const (
+	latestURL   = "https://api.github.com/repos/VAPTechnologie/vap-convertisseur-epilog/releases/latest"
+	releasesURL = "https://github.com/VAPTechnologie/vap-convertisseur-epilog/releases"
+)
+
+// versionNums : "v1.10" ou "VAP  V1.5" -> [1 10] ; nil si aucun numéro.
+func versionNums(s string) []int {
+	s = strings.TrimSpace(s)
+	if i := strings.LastIndexAny(s, "vV "); i >= 0 {
+		s = s[i+1:]
+	}
+	var n []int
+	for _, p := range strings.Split(s, ".") {
+		v, err := strconv.Atoi(p)
+		if err != nil {
+			return nil
+		}
+		n = append(n, v)
+	}
+	return n
+}
+
+// NewerVersion : latest est-elle plus récente que current ? (1.10 > 1.9)
+func NewerVersion(latest, current string) bool {
+	l, c := versionNums(latest), versionNums(current)
+	if l == nil || c == nil {
+		return false
+	}
+	for i := 0; i < len(l) || i < len(c); i++ {
+		var a, b int
+		if i < len(l) {
+			a = l[i]
+		}
+		if i < len(c) {
+			b = c[i]
+		}
+		if a != b {
+			return a > b
+		}
+	}
+	return false
+}
+
+// LatestRelease : tag et page de la dernière release.
+func LatestRelease(url string) (tag, page string, err error) {
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return "", "", err
+	}
+	req.Header.Set("User-Agent", "VAP-Convertisseur-Epilog")
+	req.Header.Set("Accept", "application/vnd.github+json")
+	resp, err := (&http.Client{Timeout: 5 * time.Second}).Do(req)
+	if err != nil {
+		return "", "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", "", errors.New(resp.Status)
+	}
+	var r struct {
+		Tag  string `json:"tag_name"`
+		Page string `json:"html_url"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(nil, resp.Body, 1<<20)).Decode(&r); err != nil {
+		return "", "", err
+	}
+	// on n'ouvrira que la page des releases du projet
+	if !strings.HasPrefix(r.Page, releasesURL+"/") {
+		r.Page = releasesURL + "/latest"
+	}
+	return r.Tag, r.Page, nil
+}

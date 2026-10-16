@@ -462,6 +462,21 @@ var tr = map[string][nLang]string{
 		"\n\n已保存错误报告：\n%s\n\n通过电子邮件发送给 VAP？（将选中该文件以便添加为附件）",
 		"\n\nエラーレポートを保存しました：\n%s\n\nVAP にメールで送信しますか？（添付できるようにファイルが選択されます）",
 	},
+	"upd.link": {
+		"Nouvelle version %s disponible", "New version %s available", "Nueva versión %s disponible", "Neue Version %s verfügbar",
+		"Nuova versione %s disponibile", "Nova versão %s disponível", "Nieuwe versie %s beschikbaar", "新版本 %s 可用", "新しいバージョン %s があります",
+	},
+	"log.update": {
+		"Une nouvelle version du convertisseur (%s) est disponible : %s",
+		"A new version of the converter (%s) is available: %s",
+		"Hay una nueva versión del convertidor (%s) disponible: %s",
+		"Eine neue Version des Konverters (%s) ist verfügbar: %s",
+		"È disponibile una nuova versione del convertitore (%s): %s",
+		"Uma nova versão do conversor (%s) está disponível: %s",
+		"Er is een nieuwe versie van de converter (%s) beschikbaar: %s",
+		"转换器有新版本（%s）可用：%s",
+		"コンバーターの新しいバージョン（%s）があります：%s",
+	},
 	"log.report": {
 		"Rapport d'erreur : ", "Error report: ", "Informe de error: ", "Fehlerbericht: ", "Rapporto di errore: ",
 		"Relatório de erro: ", "Foutrapport: ", "错误报告：", "エラーレポート：",

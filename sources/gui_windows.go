@@ -233,6 +233,7 @@ const (
 	idLblLaser
 	idDonate
 	idSuggest
+	idUpdate
 )
 
 // Page de don (PayPal.Me de VAP Technologie), ouverte dans le navigateur.
@@ -387,6 +388,7 @@ type app struct {
 	sections                             []section
 	titleRight, footerRight              int  // limites des textes dessinés (unités logiques)
 	inWelcome, welcomeOnly               bool // journal = seulement le message d'accueil
+	newRelease                           release // version plus récente trouvée sur GitHub
 }
 
 type section struct {
@@ -471,6 +473,7 @@ func (a *app) buildUI() {
 	a.child("BUTTON", "", bsPushButton|wsTabStop, 0, 0, 0, 10, 10, idQuit)
 	a.child("BUTTON", "", bsPushButton|wsTabStop, 0, 0, 0, 10, 10, idDonate)
 	a.child("BUTTON", "", bsPushButton|wsTabStop, 0, 0, 0, 10, 10, idSuggest)
+	a.child("STATIC", "", ssLeft|ssNotify|ssEndEllip|ssCenterImg, 0, 0, 0, 10, 10, idUpdate)
 	enable(a.ctl[idOpen], false)
 
 	send(a.ctl[idAir], bmSetCheck, 1, 0)
@@ -507,6 +510,7 @@ func (a *app) applyLanguage(first bool) {
 	fill(idSort, []string{"sort.none", "sort.inout", "sort.opt", "sort.dat"}, 1)
 	fill(idLaser, []string{"laser.co2", "laser.fiber"}, 0)
 	a.countDats(false)
+	a.applyUpdateText()
 	a.layout()
 	if first || a.welcomeOnly {
 		a.showWelcome()
@@ -519,6 +523,9 @@ func (a *app) showWelcome() {
 	a.inWelcome = true
 	for i := 0; i <= 5; i++ {
 		a.log(T(fmt.Sprintf("welcome.%d", i)))
+	}
+	if a.newRelease.tag != "" {
+		a.log(a.updateLogLine())
 	}
 	a.inWelcome = false
 	a.welcomeOnly = true
@@ -634,7 +641,13 @@ func (a *app) layout() {
 
 	mv(idProgress, m, y, right-m, 10)
 	y += 18
-	mv(idLog, m, y, right-m, cliH-y-66)
+	// lien « nouvelle version » sous le journal, au-dessus de « VAP V1.5 »
+	logB := cliH - 66
+	if a.newRelease.tag != "" {
+		logB -= 22
+		mv(idUpdate, m, logB+4, min(right-m, a.measure(a.fontUI, Tf("upd.link", a.newRelease.tag))+4), 22)
+	}
+	mv(idLog, m, y, right-m, logB-y)
 
 	by := cliH - 50
 	qw := max(110, tw("btn.quit")+36)
@@ -1017,6 +1030,10 @@ func (a *app) onCommand(id int, code int) {
 		pShellExecuteW.Call(a.hwnd, wp("open"), wp(donateURL), 0, 0, 1)
 	case idSuggest:
 		a.sendSuggestion()
+	case idUpdate:
+		if code == stnClicked && a.newRelease.page != "" {
+			pShellExecuteW.Call(a.hwnd, wp("open"), wp(a.newRelease.page), 0, 0, 1)
+		}
 	}
 }
 
@@ -1052,6 +1069,8 @@ func wndProc(hwnd, msg, wParam, lParam uintptr) uintptr {
 		pSetBkColor.Call(hdc, colBody)
 		if lParam == A.ctl[idDatInfo] {
 			pSetTextColor.Call(hdc, colMuted)
+		} else if lParam == A.ctl[idUpdate] {
+			pSetTextColor.Call(hdc, colAccent)
 		} else {
 			pSetTextColor.Call(hdc, colText)
 		}
@@ -1075,6 +1094,14 @@ func wndProc(hwnd, msg, wParam, lParam uintptr) uintptr {
 			pSetCursor.Call(wait)
 			return 1
 		}
+		if wParam == A.ctl[idUpdate] {
+			hand, _, _ := pLoadCursorW.Call(0, idcHand)
+			pSetCursor.Call(hand)
+			return 1
+		}
+	case wmUpdate:
+		A.onUpdate()
+		return 0
 	case wmClose:
 		if A.busy {
 			return 0
@@ -1169,6 +1196,7 @@ func main() {
 
 	pShowWindow.Call(a.hwnd, 1)
 	pUpdateWindow.Call(a.hwnd)
+	a.checkUpdate()
 	user32.NewProc("SetForegroundWindow").Call(a.hwnd)
 	pSetFocus.Call(a.ctl[idDatBrowse])
 
