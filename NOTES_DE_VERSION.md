@@ -2,6 +2,13 @@
 
 Le VAP Convertisseur Epilog reprend les anciens réglages des pilotes Epilog (fichiers .DAT) et les range automatiquement dans Epilog Job Manager. Vos années de réglages matières passent dans Job Manager en un clic, sans rien ressaisir.
 
+## Version 1.7 — octobre 2026
+
+Un programme plus léger, et vérifié automatiquement à chaque modification.
+
+- **Deux fois plus léger** : le programme passe de 7,9 Mo à 4,2 Mo. La recherche de nouvelle version utilise maintenant le module Internet intégré à Windows. Rien ne change à l'utilisation.
+- **Tests automatiques** : à chaque modification du convertisseur, GitHub le compile et lance les tests sur un Windows, avant toute publication.
+
 ## Version 1.6 — octobre 2026
 
 Des contrôles avant la conversion, et plus de 3 100 réglages vérifiés.
