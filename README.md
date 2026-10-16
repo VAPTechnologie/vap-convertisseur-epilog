@@ -1,5 +1,7 @@
 <p align="center"><img src="docs/logo.png" alt="VAP" width="320"></p>
 
+[![Tests](https://github.com/VAPTechnologie/vap-convertisseur-epilog/actions/workflows/tests.yml/badge.svg)](https://github.com/VAPTechnologie/vap-convertisseur-epilog/actions/workflows/tests.yml)
+
 # VAP Convertisseur Epilog
 
 Vos anciens réglages Epilog (fichiers **.DAT** des anciens pilotes) passent dans **Epilog Job Manager** en un clic, déjà rangés par machine, sans rien ressaisir.
