@@ -18,15 +18,15 @@ La conversion part d'une sauvegarde de la base Job Manager qui contient déjà l
 
 MACHINES CONCERNÉES
   Anciens réglages .DAT lus (anciens pilotes Epilog, avant Job Manager) :
-    • Mini / Mini+ et Helix (CO2)
-    • Zing / Zing+ (CO2)
-    • Fusion / Fusion+ (CO2)
-    • Fusion Fibre / Fusion+ Fibre (choisir « Fibre » dans Source laser)
+    • Mini 18 / Mini 24 et Helix (CO2)
+    • Zing 16 / Zing 24 (CO2)
+    • Fusion 32 / Fusion 40 (CO2)
+    • Fusion 32 Fibre / Fusion 40 Fibre (choisir « Fibre » dans Source laser)
   Machine de destination : la même machine, déclarée dans Job Manager
-  (Mini, Helix, Zing, Fusion).
+  (Mini 18, Mini 24, Helix, Zing 16, Zing 24, Fusion 32, Fusion 40).
   Non concernées : Fusion Pro, Fusion Edge, Fusion Maker (dernière génération, sans .DAT).
-  Plus de 3 100 anciens réglages contrôlés valeur par valeur (Mini, Helix, Zing, Fusion,
-  modèles « + » compris). Vérifiez toujours chaque réglage sur la machine avant production.
+  Plus de 3 100 anciens réglages contrôlés valeur par valeur (Mini 18, Mini 24, Helix, Zing 16, Zing 24,
+  Fusion 32, Fusion 40). Vérifiez toujours chaque réglage sur la machine avant production.
 
 ÉTAPE 1 — Préparer Job Manager (sur le PC relié à la machine)
   1. Ouvrir Epilog Job Manager.
@@ -75,15 +75,15 @@ The conversion starts from a backup of the Job Manager database that already con
 
 SUPPORTED MACHINES
   Old .DAT settings read (legacy Epilog drivers, before Job Manager):
-    • Mini / Mini+ and Helix (CO2)
-    • Zing / Zing+ (CO2)
-    • Fusion / Fusion+ (CO2)
-    • Fusion Fiber / Fusion+ Fiber (choose "Fiber" in Laser source)
+    • Mini 18 / Mini 24 and Helix (CO2)
+    • Zing 16 / Zing 24 (CO2)
+    • Fusion 32 / Fusion 40 (CO2)
+    • Fusion 32 Fiber / Fusion 40 Fiber (choose "Fiber" in Laser source)
   Target machine: the same machine, set up in Job Manager
-  (Mini, Helix, Zing, Fusion).
+  (Mini 18, Mini 24, Helix, Zing 16, Zing 24, Fusion 32, Fusion 40).
   Not supported: Fusion Pro, Fusion Edge, Fusion Maker (latest generation, no .DAT files).
-  Over 3,100 old settings checked value by value (Mini, Helix, Zing, Fusion,
-  "+" models included). Always check each setting on the machine before production.
+  Over 3,100 old settings checked value by value (Mini 18, Mini 24, Helix, Zing 16, Zing 24,
+  Fusion 32, Fusion 40). Always check each setting on the machine before production.
 
 STEP 1 — Prepare Job Manager (on the PC connected to the machine)
   1. Open Epilog Job Manager.
@@ -132,15 +132,15 @@ La conversión parte de una copia de seguridad de la base de datos de Job Manage
 
 MÁQUINAS COMPATIBLES
   Ajustes .DAT antiguos leídos (antiguos controladores Epilog, anteriores a Job Manager):
-    • Mini / Mini+ y Helix (CO2)
-    • Zing / Zing+ (CO2)
-    • Fusion / Fusion+ (CO2)
-    • Fusion Fibra / Fusion+ Fibra (elija «Fibra» en Fuente láser)
+    • Mini 18 / Mini 24 y Helix (CO2)
+    • Zing 16 / Zing 24 (CO2)
+    • Fusion 32 / Fusion 40 (CO2)
+    • Fusion 32 Fibra / Fusion 40 Fibra (elija «Fibra» en Fuente láser)
   Máquina de destino: la misma máquina, configurada en Job Manager
-  (Mini, Helix, Zing, Fusion).
+  (Mini 18, Mini 24, Helix, Zing 16, Zing 24, Fusion 32, Fusion 40).
   No compatibles: Fusion Pro, Fusion Edge, Fusion Maker (última generación, sin .DAT).
-  Más de 3100 ajustes antiguos comprobados valor por valor (Mini, Helix, Zing, Fusion,
-  modelos «+» incluidos). Compruebe siempre cada ajuste en la máquina antes de producir.
+  Más de 3100 ajustes antiguos comprobados valor por valor (Mini 18, Mini 24, Helix, Zing 16, Zing 24,
+  Fusion 32, Fusion 40). Compruebe siempre cada ajuste en la máquina antes de producir.
 
 PASO 1 — Preparar Job Manager (en el PC conectado a la máquina)
   1. Abra Epilog Job Manager.
@@ -189,15 +189,15 @@ Die Konvertierung geht von einer Sicherung der Job Manager-Datenbank aus, die di
 
 UNTERSTÜTZTE MASCHINEN
   Gelesene alte .DAT-Einstellungen (alte Epilog-Treiber, vor Job Manager):
-    • Mini / Mini+ und Helix (CO2)
-    • Zing / Zing+ (CO2)
-    • Fusion / Fusion+ (CO2)
-    • Fusion Faser / Fusion+ Faser („Faser“ unter Laserquelle wählen)
+    • Mini 18 / Mini 24 und Helix (CO2)
+    • Zing 16 / Zing 24 (CO2)
+    • Fusion 32 / Fusion 40 (CO2)
+    • Fusion 32 Faser / Fusion 40 Faser („Faser“ unter Laserquelle wählen)
   Zielmaschine: dieselbe Maschine, in Job Manager angelegt
-  (Mini, Helix, Zing, Fusion).
+  (Mini 18, Mini 24, Helix, Zing 16, Zing 24, Fusion 32, Fusion 40).
   Nicht unterstützt: Fusion Pro, Fusion Edge, Fusion Maker (neueste Generation, ohne .DAT).
-  Über 3.100 alte Einstellungen Wert für Wert geprüft (Mini, Helix, Zing, Fusion,
-  „+“-Modelle inbegriffen). Jede Einstellung vor der Produktion an der Maschine prüfen.
+  Über 3.100 alte Einstellungen Wert für Wert geprüft (Mini 18, Mini 24, Helix, Zing 16, Zing 24,
+  Fusion 32, Fusion 40). Jede Einstellung vor der Produktion an der Maschine prüfen.
 
 SCHRITT 1 — Job Manager vorbereiten (am PC, der mit der Maschine verbunden ist)
   1. Epilog Job Manager öffnen.
@@ -246,15 +246,15 @@ La conversione parte da un backup del database di Job Manager che contiene già 
 
 MACCHINE INTERESSATE
   Vecchie impostazioni .DAT lette (vecchi driver Epilog, prima di Job Manager):
-    • Mini / Mini+ e Helix (CO2)
-    • Zing / Zing+ (CO2)
-    • Fusion / Fusion+ (CO2)
-    • Fusion Fibra / Fusion+ Fibra (scegliere «Fibra» in Sorgente laser)
+    • Mini 18 / Mini 24 e Helix (CO2)
+    • Zing 16 / Zing 24 (CO2)
+    • Fusion 32 / Fusion 40 (CO2)
+    • Fusion 32 Fibra / Fusion 40 Fibra (scegliere «Fibra» in Sorgente laser)
   Macchina di destinazione: la stessa macchina, configurata in Job Manager
-  (Mini, Helix, Zing, Fusion).
+  (Mini 18, Mini 24, Helix, Zing 16, Zing 24, Fusion 32, Fusion 40).
   Non interessate: Fusion Pro, Fusion Edge, Fusion Maker (ultima generazione, senza .DAT).
-  Oltre 3.100 vecchie impostazioni controllate valore per valore (Mini, Helix, Zing, Fusion,
-  modelli «+» compresi). Controllare sempre ogni impostazione sulla macchina prima della produzione.
+  Oltre 3.100 vecchie impostazioni controllate valore per valore (Mini 18, Mini 24, Helix, Zing 16, Zing 24,
+  Fusion 32, Fusion 40). Controllare sempre ogni impostazione sulla macchina prima della produzione.
 
 PASSO 1 — Preparare Job Manager (sul PC collegato alla macchina)
   1. Aprire Epilog Job Manager.
@@ -303,15 +303,15 @@ A conversão parte de um backup do banco de dados do Job Manager que já contém
 
 MÁQUINAS COMPATÍVEIS
   Configurações .DAT antigas lidas (antigos drivers Epilog, antes do Job Manager):
-    • Mini / Mini+ e Helix (CO2)
-    • Zing / Zing+ (CO2)
-    • Fusion / Fusion+ (CO2)
-    • Fusion Fibra / Fusion+ Fibra (escolha "Fibra" em Fonte laser)
+    • Mini 18 / Mini 24 e Helix (CO2)
+    • Zing 16 / Zing 24 (CO2)
+    • Fusion 32 / Fusion 40 (CO2)
+    • Fusion 32 Fibra / Fusion 40 Fibra (escolha "Fibra" em Fonte laser)
   Máquina de destino: a mesma máquina, configurada no Job Manager
-  (Mini, Helix, Zing, Fusion).
+  (Mini 18, Mini 24, Helix, Zing 16, Zing 24, Fusion 32, Fusion 40).
   Não compatíveis: Fusion Pro, Fusion Edge, Fusion Maker (última geração, sem .DAT).
-  Mais de 3.100 configurações antigas verificadas valor a valor (Mini, Helix, Zing, Fusion,
-  modelos "+" incluídos). Verifique sempre cada configuração na máquina antes de produzir.
+  Mais de 3.100 configurações antigas verificadas valor a valor (Mini 18, Mini 24, Helix, Zing 16, Zing 24,
+  Fusion 32, Fusion 40). Verifique sempre cada configuração na máquina antes de produzir.
 
 ETAPA 1 — Preparar o Job Manager (no PC ligado à máquina)
   1. Abra o Epilog Job Manager.
@@ -360,15 +360,15 @@ De conversie gaat uit van een back-up van de Job Manager-database waarin de doel
 
 ONDERSTEUNDE MACHINES
   Gelezen oude .DAT-instellingen (oude Epilog-drivers, van vóór Job Manager):
-    • Mini / Mini+ en Helix (CO2)
-    • Zing / Zing+ (CO2)
-    • Fusion / Fusion+ (CO2)
-    • Fusion Fiber / Fusion+ Fiber (kies 'Fiber' bij Laserbron)
+    • Mini 18 / Mini 24 en Helix (CO2)
+    • Zing 16 / Zing 24 (CO2)
+    • Fusion 32 / Fusion 40 (CO2)
+    • Fusion 32 Fiber / Fusion 40 Fiber (kies 'Fiber' bij Laserbron)
   Doelmachine: dezelfde machine, ingesteld in Job Manager
-  (Mini, Helix, Zing, Fusion).
+  (Mini 18, Mini 24, Helix, Zing 16, Zing 24, Fusion 32, Fusion 40).
   Niet ondersteund: Fusion Pro, Fusion Edge, Fusion Maker (nieuwste generatie, zonder .DAT).
-  Meer dan 3.100 oude instellingen waarde voor waarde gecontroleerd (Mini, Helix, Zing, Fusion,
-  '+'-modellen inbegrepen). Controleer elke instelling altijd op de machine vóór productie.
+  Meer dan 3.100 oude instellingen waarde voor waarde gecontroleerd (Mini 18, Mini 24, Helix, Zing 16, Zing 24,
+  Fusion 32, Fusion 40). Controleer elke instelling altijd op de machine vóór productie.
 
 STAP 1 — Job Manager voorbereiden (op de pc die met de machine verbonden is)
   1. Open Epilog Job Manager.
@@ -417,14 +417,14 @@ GOED OM TE WETEN
 
 适用机器
   可读取的旧 .DAT 设置（Job Manager 之前的旧版 Epilog 驱动程序）：
-    • Mini / Mini+ 和 Helix（CO2）
-    • Zing / Zing+（CO2）
-    • Fusion / Fusion+（CO2）
-    • Fusion 光纤 / Fusion+ 光纤（在“激光源”中选择“光纤”）
+    • Mini 18 / Mini 24 和 Helix（CO2）
+    • Zing 16 / Zing 24（CO2）
+    • Fusion 32 / Fusion 40（CO2）
+    • Fusion 32 光纤 / Fusion 40 光纤（在“激光源”中选择“光纤”）
   目标机器：同一台机器，已在 Job Manager 中添加
-  （Mini、Helix、Zing、Fusion）。
+  （Mini 18、Mini 24、Helix、Zing 16、Zing 24、Fusion 32、Fusion 40）。
   不适用：Fusion Pro、Fusion Edge、Fusion Maker（最新一代，没有 .DAT 文件）。
-  已逐项核对 3100 多项旧设置（Mini、Helix、Zing、Fusion，含“+”型号）。
+  已逐项核对 3100 多项旧设置（Mini 18、Mini 24、Helix、Zing 16、Zing 24、Fusion 32、Fusion 40）。
   正式生产前，请务必在机器上检查每项设置。
 
 第 1 步 — 准备 Job Manager（在连接机器的电脑上）
@@ -474,14 +474,14 @@ GOED OM TE WETEN
 
 対象マシン
   読み込める旧 .DAT 設定（Job Manager 以前の旧 Epilog ドライバー）：
-    • Mini / Mini+ および Helix（CO2）
-    • Zing / Zing+（CO2）
-    • Fusion / Fusion+（CO2）
-    • Fusion ファイバー / Fusion+ ファイバー（「レーザー光源」で「ファイバー」を選択）
+    • Mini 18 / Mini 24 および Helix（CO2）
+    • Zing 16 / Zing 24（CO2）
+    • Fusion 32 / Fusion 40（CO2）
+    • Fusion 32 ファイバー / Fusion 40 ファイバー（「レーザー光源」で「ファイバー」を選択）
   変換先のマシン：同じマシンを Job Manager に登録しておきます
-  （Mini、Helix、Zing、Fusion）。
+  （Mini 18、Mini 24、Helix、Zing 16、Zing 24、Fusion 32、Fusion 40）。
   対象外：Fusion Pro、Fusion Edge、Fusion Maker（最新世代、.DAT なし）。
-  3,100 件以上の旧設定を値ごとに確認済みです（Mini、Helix、Zing、Fusion、「+」モデルを含む）。
+  3,100 件以上の旧設定を値ごとに確認済みです（Mini 18、Mini 24、Helix、Zing 16、Zing 24、Fusion 32、Fusion 40）。
   本番加工の前に、必ず各設定を機械で確認してください。
 
 ステップ 1 — Job Manager の準備（マシンに接続された PC で）

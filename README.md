@@ -12,9 +12,9 @@ Gratuit · Windows 10 et 11 · 9 langues · aucune installation
 
 ## Machines prises en charge
 
-- Mini, Mini+ et Helix
-- Zing et Zing+
-- Fusion et Fusion+, CO2 et Fibre
+- Mini 18, Mini 24 et Helix
+- Zing 16 et Zing 24
+- Fusion 32 et Fusion 40, CO2 et Fibre
 
 ## Comment l'utiliser
 
@@ -37,13 +37,14 @@ Chaque valeur convertie a été contrôlée dans Job Manager, réglage par régl
 
 | Machine | Réglages contrôlés | État |
 |---|---|---|
-| Mini (Mini 24) | 98 réglages + réglages de test du pilote | ✅ vérifiée |
+| Mini 18 / Mini 24 | 98 réglages + réglages de test du pilote | ✅ vérifiée |
 | Helix | 80 réglages | ✅ vérifiée |
-| Zing | 82 réglages + réglages de test du pilote | ✅ vérifiée |
-| Fusion (CO2 et Fibre) | 67 réglages + réglages de test du pilote | ✅ vérifiée |
-| Mini+, Zing+, Fusion+ | — | ⚠️ non vérifiée (pas de fichier .DAT disponible) |
+| Zing 16 / Zing 24 | 82 réglages + réglages de test du pilote | ✅ vérifiée |
+| Fusion 32 / Fusion 40 (CO2 et Fibre) | 67 réglages + réglages de test du pilote | ✅ vérifiée |
 
-Vous avez une machine non vérifiée ? Vos fichiers .DAT nous aideraient : écrivez à **vapfrenchtec@gmail.com**.
+En plus, 3 121 anciens réglages (66 dossiers, tous ces modèles) ont été convertis puis comparés valeur par valeur à un décodage indépendant des .DAT : tous sont conformes. Les deux modèles de chaque gamme utilisent le même pilote et le même format de .DAT.
+
+Vous avez un autre modèle, ou un réglage qui ne correspond pas ? Vos fichiers .DAT nous aideraient : écrivez à **vapfrenchtec@gmail.com**.
 
 ## Questions fréquentes
 
