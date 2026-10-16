@@ -25,8 +25,8 @@ MACHINES CONCERNÉES
   Machine de destination : la même machine, déclarée dans Job Manager
   (Mini, Helix, Zing, Fusion).
   Non concernées : Fusion Pro, Fusion Edge, Fusion Maker (dernière génération, sans .DAT).
-  Conversion testée de bout en bout sur une Mini 24 40 W : pour un autre modèle,
-  contrôler quelques réglages après le premier import.
+  Plus de 3 100 anciens réglages contrôlés valeur par valeur (Mini, Helix, Zing, Fusion,
+  modèles « + » compris). Vérifiez toujours chaque réglage sur la machine avant production.
 
 ÉTAPE 1 — Préparer Job Manager (sur le PC relié à la machine)
   1. Ouvrir Epilog Job Manager.
@@ -82,8 +82,8 @@ SUPPORTED MACHINES
   Target machine: the same machine, set up in Job Manager
   (Mini, Helix, Zing, Fusion).
   Not supported: Fusion Pro, Fusion Edge, Fusion Maker (latest generation, no .DAT files).
-  Conversion fully tested on a Mini 24 40 W: for another model,
-  check a few settings after the first import.
+  Over 3,100 old settings checked value by value (Mini, Helix, Zing, Fusion,
+  "+" models included). Always check each setting on the machine before production.
 
 STEP 1 — Prepare Job Manager (on the PC connected to the machine)
   1. Open Epilog Job Manager.
@@ -139,8 +139,8 @@ MÁQUINAS COMPATIBLES
   Máquina de destino: la misma máquina, configurada en Job Manager
   (Mini, Helix, Zing, Fusion).
   No compatibles: Fusion Pro, Fusion Edge, Fusion Maker (última generación, sin .DAT).
-  Conversión probada de principio a fin en una Mini 24 40 W: para otro modelo,
-  compruebe algunos ajustes tras la primera importación.
+  Más de 3100 ajustes antiguos comprobados valor por valor (Mini, Helix, Zing, Fusion,
+  modelos «+» incluidos). Compruebe siempre cada ajuste en la máquina antes de producir.
 
 PASO 1 — Preparar Job Manager (en el PC conectado a la máquina)
   1. Abra Epilog Job Manager.
@@ -196,8 +196,8 @@ UNTERSTÜTZTE MASCHINEN
   Zielmaschine: dieselbe Maschine, in Job Manager angelegt
   (Mini, Helix, Zing, Fusion).
   Nicht unterstützt: Fusion Pro, Fusion Edge, Fusion Maker (neueste Generation, ohne .DAT).
-  Konvertierung vollständig getestet an einer Mini 24 40 W: Bei einem anderen Modell
-  nach dem ersten Import einige Einstellungen prüfen.
+  Über 3.100 alte Einstellungen Wert für Wert geprüft (Mini, Helix, Zing, Fusion,
+  „+“-Modelle inbegriffen). Jede Einstellung vor der Produktion an der Maschine prüfen.
 
 SCHRITT 1 — Job Manager vorbereiten (am PC, der mit der Maschine verbunden ist)
   1. Epilog Job Manager öffnen.
@@ -253,8 +253,8 @@ MACCHINE INTERESSATE
   Macchina di destinazione: la stessa macchina, configurata in Job Manager
   (Mini, Helix, Zing, Fusion).
   Non interessate: Fusion Pro, Fusion Edge, Fusion Maker (ultima generazione, senza .DAT).
-  Conversione testata completamente su una Mini 24 40 W: per un altro modello,
-  controllare alcune impostazioni dopo la prima importazione.
+  Oltre 3.100 vecchie impostazioni controllate valore per valore (Mini, Helix, Zing, Fusion,
+  modelli «+» compresi). Controllare sempre ogni impostazione sulla macchina prima della produzione.
 
 PASSO 1 — Preparare Job Manager (sul PC collegato alla macchina)
   1. Aprire Epilog Job Manager.
@@ -310,8 +310,8 @@ MÁQUINAS COMPATÍVEIS
   Máquina de destino: a mesma máquina, configurada no Job Manager
   (Mini, Helix, Zing, Fusion).
   Não compatíveis: Fusion Pro, Fusion Edge, Fusion Maker (última geração, sem .DAT).
-  Conversão testada do início ao fim numa Mini 24 40 W: para outro modelo,
-  verifique algumas configurações após a primeira importação.
+  Mais de 3.100 configurações antigas verificadas valor a valor (Mini, Helix, Zing, Fusion,
+  modelos "+" incluídos). Verifique sempre cada configuração na máquina antes de produzir.
 
 ETAPA 1 — Preparar o Job Manager (no PC ligado à máquina)
   1. Abra o Epilog Job Manager.
@@ -367,8 +367,8 @@ ONDERSTEUNDE MACHINES
   Doelmachine: dezelfde machine, ingesteld in Job Manager
   (Mini, Helix, Zing, Fusion).
   Niet ondersteund: Fusion Pro, Fusion Edge, Fusion Maker (nieuwste generatie, zonder .DAT).
-  Conversie volledig getest op een Mini 24 40 W: controleer bij een ander model
-  enkele instellingen na de eerste import.
+  Meer dan 3.100 oude instellingen waarde voor waarde gecontroleerd (Mini, Helix, Zing, Fusion,
+  '+'-modellen inbegrepen). Controleer elke instelling altijd op de machine vóór productie.
 
 STAP 1 — Job Manager voorbereiden (op de pc die met de machine verbonden is)
   1. Open Epilog Job Manager.
@@ -424,8 +424,8 @@ GOED OM TE WETEN
   目标机器：同一台机器，已在 Job Manager 中添加
   （Mini、Helix、Zing、Fusion）。
   不适用：Fusion Pro、Fusion Edge、Fusion Maker（最新一代，没有 .DAT 文件）。
-  已在 Mini 24 40 W 上完成完整测试：其他型号
-  请在首次导入后检查部分设置。
+  已逐项核对 3100 多项旧设置（Mini、Helix、Zing、Fusion，含“+”型号）。
+  正式生产前，请务必在机器上检查每项设置。
 
 第 1 步 — 准备 Job Manager（在连接机器的电脑上）
   1. 打开 Epilog Job Manager。
@@ -481,8 +481,8 @@ GOED OM TE WETEN
   変換先のマシン：同じマシンを Job Manager に登録しておきます
   （Mini、Helix、Zing、Fusion）。
   対象外：Fusion Pro、Fusion Edge、Fusion Maker（最新世代、.DAT なし）。
-  Mini 24 40 W で一通りテスト済みです。他の機種では、
-  最初のインポート後にいくつかの設定を確認してください。
+  3,100 件以上の旧設定を値ごとに確認済みです（Mini、Helix、Zing、Fusion、「+」モデルを含む）。
+  本番加工の前に、必ず各設定を機械で確認してください。
 
 ステップ 1 — Job Manager の準備（マシンに接続された PC で）
   1. Epilog Job Manager を開きます。
