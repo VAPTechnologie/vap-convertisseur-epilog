@@ -25,7 +25,7 @@ body:
     attributes:
       label: Version du convertisseur
       description: Affichée en bas à gauche de la fenêtre.
-      placeholder: "ex. V1.5"
+      placeholder: "ex. V1.6"
   - type: dropdown
     id: langue
     attributes:

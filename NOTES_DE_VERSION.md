@@ -2,6 +2,17 @@
 
 Le VAP Convertisseur Epilog reprend les anciens réglages des pilotes Epilog (fichiers .DAT) et les range automatiquement dans Epilog Job Manager. Vos années de réglages matières passent dans Job Manager en un clic, sans rien ressaisir.
 
+## Version 1.6 — octobre 2026
+
+Des contrôles avant la conversion, et plus de 3 100 réglages vérifiés.
+
+- **Sauvegarde contrôlée dès son choix** : si la sauvegarde Job Manager n'a pas la structure attendue, un message clair le dit tout de suite et conseille d'en refaire une, au lieu d'une erreur technique en pleine conversion.
+- **Mauvais dossier repéré** : si vous choisissez par erreur un dossier « … - Conversion Job Manager », le convertisseur propose le dossier des .DAT d'origine.
+- **Nouvelle version signalée** : au démarrage, un lien discret apparaît quand une version plus récente est disponible sur GitHub.
+- **Plus de 3 100 réglages contrôlés** : chaque valeur convertie a été comparée à un décodage indépendant des .DAT, sur toutes les machines prises en charge.
+- **Rappel de prudence** : le message de fin de conversion rappelle de vérifier chaque réglage avant toute production.
+- **Noms des modèles** : Mini 18 / Mini 24, Zing 16 / Zing 24, Fusion 32 / Fusion 40.
+
 ## Version 1.5 — octobre 2026
 
 En cas de problème, un rapport d'erreur permet de trouver la cause à distance.
