@@ -381,7 +381,8 @@ type app struct {
 	ctl                                  map[int]uintptr
 	machines                             []Machine
 	outDir                               string
-	busy                                 bool
+	report                               string // dernier rapport d'erreur écrit
+	busy                               bool
 	sections                             []section
 	titleRight, footerRight              int  // limites des textes dessinés (unités logiques)
 	inWelcome, welcomeOnly               bool // journal = seulement le message d'accueil
@@ -900,7 +901,17 @@ func (a *app) convert() {
 	if err != nil {
 		send(a.ctl[idProgress], pbmSetPos, 0, 0)
 		a.log(T("log.fail") + err.Error())
-		msgBox(a.hwnd, T("err.convFailed")+err.Error(), T("msg.title"), mbIconError)
+		rp, rerr := WriteReport(openRO, ReportInput{Version: appVersion(), System: reportSystem(),
+			Backup: bk, Options: o, Log: getText(a.ctl[idLog]), Err: err})
+		if rerr != nil {
+			msgBox(a.hwnd, T("err.convFailed")+err.Error(), T("msg.title"), mbIconError)
+			return
+		}
+		a.report = rp
+		a.log(T("log.report") + rp)
+		if msgBox(a.hwnd, T("err.convFailed")+err.Error()+Tf("ask.sendReport", rp), T("msg.title"), mbYesNo|mbIconError) == idYes {
+			a.sendSuggestion()
+		}
 		return
 	}
 	send(a.ctl[idProgress], pbmSetPos, 100, 0)
@@ -979,8 +990,21 @@ func (a *app) onCommand(id int, code int) {
 	case idDonate:
 		pShellExecuteW.Call(a.hwnd, wp("open"), wp(donateURL), 0, 0, 1)
 	case idSuggest:
-		pShellExecuteW.Call(a.hwnd, wp("open"), wp(suggestMailto()), 0, 0, 1)
+		a.sendSuggestion()
 	}
+}
+
+// sendSuggestion : e-mail préparé ; s'il y a eu une erreur, l'explorateur
+// s'ouvre aussi sur le rapport pour le joindre (mailto ne permet pas de pièce jointe).
+func (a *app) sendSuggestion() {
+	report := ""
+	if a.report != "" {
+		if _, err := os.Stat(a.report); err == nil {
+			report = a.report
+			pShellExecuteW.Call(a.hwnd, wp("open"), wp("explorer.exe"), wp(`/select,"`+report+`"`), 0, 1)
+		}
+	}
+	pShellExecuteW.Call(a.hwnd, wp("open"), wp(suggestMailto(report)), 0, 0, 1)
 }
 
 func wndProc(hwnd, msg, wParam, lParam uintptr) uintptr {
