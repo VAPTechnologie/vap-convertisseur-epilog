@@ -1,0 +1,46 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: sources
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: sources/go.mod
+          cache: false
+
+      # Les appels Win32 par uintptr déclenchent « possible misuse of unsafe.Pointer » : ces avertissements sont ignorés, les autres font échouer.
+      - name: go vet
+        run: |
+          go vet ./... 2>&1 | tee vet.txt || true
+          if grep -v -e '^#' -e 'possible misuse of unsafe.Pointer' vet.txt; then exit 1; fi
+
+      # Sans VAP_DAT, VAP_BACKUP, VAP_REF ni VAP_SAMPLE, les tests sur les fichiers réels sont ignorés.
+      - name: go test
+        run: go test -v ./...
+
+      - name: Ressources Windows (go-winres)
+        run: |
+          go install github.com/tc-hib/go-winres@v0.3.3
+          "$(go env GOPATH)/bin/go-winres" make --in res/winres.json --arch amd64 --out rsrc
+
+      - name: Compilation
+        run: GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags "-H windowsgui -s -w" -o "VAP Convertisseur Epilog.exe" .
+
+      - name: Taille de l'exe
+        run: ls -l "VAP Convertisseur Epilog.exe"
