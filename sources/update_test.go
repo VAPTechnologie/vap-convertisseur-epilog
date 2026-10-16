@@ -1,10 +1,6 @@
 package main
 
-import (
-	"net/http"
-	"net/http/httptest"
-	"testing"
-)
+import "testing"
 
 func TestNewerVersion(t *testing.T) {
 	for _, c := range []struct {
@@ -30,33 +26,15 @@ func TestNewerVersion(t *testing.T) {
 	}
 }
 
-func TestLatestRelease(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("User-Agent") == "" {
-			w.WriteHeader(http.StatusForbidden)
-			return
-		}
-		w.Write([]byte(`{"tag_name":"v1.6","html_url":"` + releasesURL + `/tag/v1.6","body":"..."}`))
-	}))
-	defer srv.Close()
-	tag, page, err := LatestRelease(srv.URL)
+func TestParseRelease(t *testing.T) {
+	tag, page, err := parseRelease([]byte(`{"tag_name":"v1.6","html_url":"` + releasesURL + `/tag/v1.6","body":"..."}`))
 	if err != nil || tag != "v1.6" || page != releasesURL+"/tag/v1.6" {
 		t.Fatalf("%q %q %v", tag, page, err)
 	}
-
-	limited := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusForbidden)
-	}))
-	defer limited.Close()
-	if _, _, err := LatestRelease(limited.URL); err == nil {
-		t.Error("limite de requêtes : aucune erreur")
-	}
-
-	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`{"tag_name":"v1.6","html_url":"https://exemple.invalid/"}`))
-	}))
-	defer other.Close()
-	if _, page, _ := LatestRelease(other.URL); page != releasesURL+"/latest" {
+	if _, page, _ := parseRelease([]byte(`{"tag_name":"v1.6","html_url":"https://exemple.invalid/"}`)); page != releasesURL+"/latest" {
 		t.Errorf("page hors projet acceptée : %q", page)
+	}
+	if _, _, err := parseRelease([]byte(`<html>`)); err == nil {
+		t.Error("réponse non JSON acceptée")
 	}
 }

@@ -5,11 +5,8 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
-	"net/http"
 	"strconv"
 	"strings"
-	"time"
 )
 
 const (
@@ -55,27 +52,13 @@ func NewerVersion(latest, current string) bool {
 	return false
 }
 
-// LatestRelease : tag et page de la dernière release.
-func LatestRelease(url string) (tag, page string, err error) {
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return "", "", err
-	}
-	req.Header.Set("User-Agent", "VAP-Convertisseur-Epilog")
-	req.Header.Set("Accept", "application/vnd.github+json")
-	resp, err := (&http.Client{Timeout: 5 * time.Second}).Do(req)
-	if err != nil {
-		return "", "", err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return "", "", errors.New(resp.Status)
-	}
+// parseRelease : tag et page de la release, depuis la réponse JSON de GitHub.
+func parseRelease(body []byte) (tag, page string, err error) {
 	var r struct {
 		Tag  string `json:"tag_name"`
 		Page string `json:"html_url"`
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(nil, resp.Body, 1<<20)).Decode(&r); err != nil {
+	if err := json.Unmarshal(body, &r); err != nil {
 		return "", "", err
 	}
 	// on n'ouvrira que la page des releases du projet

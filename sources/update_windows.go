@@ -16,6 +16,15 @@ const (
 
 var pPostMessageW = user32.NewProc("PostMessageW")
 
+// LatestRelease : tag et page de la dernière release.
+func LatestRelease(url string) (tag, page string, err error) {
+	body, err := httpGet(url, "VAP-Convertisseur-Epilog", "Accept: application/vnd.github+json")
+	if err != nil {
+		return "", "", err
+	}
+	return parseRelease(body)
+}
+
 type release struct{ tag, page string }
 
 var updateCh = make(chan release, 1)
