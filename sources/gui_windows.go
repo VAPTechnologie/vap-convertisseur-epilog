@@ -642,7 +642,7 @@ func (a *app) layout() {
 	mv(idQuit, right-qw, by, qw, 34)
 	mv(idConvert, right-qw-12-cvw, by, cvw, 34)
 	mv(idOpen, right-qw-12-cvw-12-ow, by, ow, 34)
-	// bouton de don juste après « VAP V1.4 », en bas à gauche
+	// bouton de don juste après « VAP V1.5 », en bas à gauche
 	sigW := a.measure(a.fontSmall, appSignature)
 	dw := max(110, tw("btn.donate")+32)
 	mv(idDonate, m+sigW+14, by, dw, 34)
@@ -1254,7 +1254,7 @@ func pickClassic(owner uintptr, folder bool, title, start string, filters [][2]s
 // Langue : choix mémorisé dans %APPDATA%\VAP Convertisseur\langue.txt,
 // sinon langue de Windows (anglais si elle n'est pas proposée).
 
-const appSignature = "VAP  V1.4"
+const appSignature = "VAP  V1.5"
 
 func langFile() string {
 	d, err := os.UserConfigDir()
