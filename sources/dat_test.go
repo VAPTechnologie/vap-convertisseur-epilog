@@ -44,6 +44,7 @@ func TestParseDatFormats(t *testing.T) {
 		layout string
 	}{
 		{2924, "Epilog Engraver Win32 Mini", "mini"},
+		{2924, "Epilog Engraver WinX64", "mini"}, // en-tête réel (Mini 24, plateau 24 × 12) : sans nom de modèle
 		{2992, "Epilog Engraver Win32 Zing", "zing"},
 		{3156, "Epilog Engraver Win32 Fusion", "fusion"},
 	} {
