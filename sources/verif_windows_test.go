@@ -218,7 +218,7 @@ func (d refDat) check(global, procs string, m Machine) []string {
 			}
 			expect("passes gravure", a["passes"], wantP)
 			if laser == 1 && d.i(3100) > 0 {
-				expect("fréquence gravure fibre", a["rasterFreq"], d.i(3100))
+				expect("fréquence gravure fibre", a["rasterFreq"], min(d.i(3100), 100))
 			}
 		case "2":
 			nCut++
@@ -358,8 +358,26 @@ func TestVerifReglages(t *testing.T) {
 			for _, r := range rows {
 				got[foldKey(toStr(r[0]))] = [2]string{toStr(r[1]), toStr(r[2])}
 			}
-			// même ordre que le convertisseur : le premier de deux noms identiques est gardé
+			// même ordre que le convertisseur : deux noms identiques au même contenu
+			// gardent le premier ; à contenu différent, le second devient « nom (2) »
 			sort.SliceStable(dats, func(i, j int) bool { return foldKey(dats[i].name) < foldKey(dats[j].name) })
+			content := map[string]string{}
+			for i, d := range dats {
+				if !d.valid(m) {
+					continue
+				}
+				c, ok := content[foldKey(d.name)]
+				if ok && c != string(d.b) {
+					orig := d.name
+					for n := 2; ok; n++ {
+						dats[i].name = fmt.Sprintf("%s (%d)", orig, n)
+						_, ok = content[foldKey(dats[i].name)]
+					}
+				}
+				if !ok {
+					content[foldKey(dats[i].name)] = string(d.b)
+				}
+			}
 			seen := map[string]bool{}
 			nOK, nBad := 0, 0
 			for _, d := range dats {

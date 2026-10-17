@@ -5,6 +5,7 @@ package main
 // sauvegarde de base Job Manager (.epidb, SQLite).
 
 import (
+	"crypto/sha256"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -67,7 +68,15 @@ type DatFile struct {
 	SpeedComp  bool
 	PowerComp  bool
 	VectorGrid bool
+	// Remarques : valeurs remplacées ou non reprises, à signaler (récapitulatif, journal)
+	Notes []string
+	Sum   [32]byte // empreinte du fichier (doublons de nom)
 }
+
+func (d *DatFile) note(k string, a ...any) { d.Notes = append(d.Notes, Tf(k, a...)) }
+
+// pct : valeur ramenée dans la plage 1-100 % de Job Manager.
+func pct(v float64) float64 { return math.Max(1, math.Min(100, v)) }
 
 // ColorEntry : une ligne de la table "Gest./Couleur" du driver
 // (à partir de l'octet 1376 : R, G, B, puissance, puis en int32 vitesse,
@@ -270,7 +279,7 @@ func (d DatFile) FreqPercent() float64 {
 	if !d.IsFusion {
 		return FreqToPercent(d.FreqRaw)
 	}
-	return math.Max(1, math.Min(100, float64(d.FreqRaw)))
+	return pct(float64(d.FreqRaw))
 }
 
 func le32(b []byte, off int) int { return int(int32(binary.LittleEndian.Uint32(b[off:]))) }
@@ -302,6 +311,7 @@ func ParseDat(path string) (DatFile, error) {
 		Path:     path,
 		Name:     strings.TrimSpace(base),
 		Header:   h,
+		Sum:      sha256.Sum256(b),
 		RPower:   le32(b, 256),
 		RSpeed:   le32(b, 260),
 		VPower:   le32(b, 264),
@@ -379,18 +389,69 @@ func ParseDat(path string) (DatFile, error) {
 			return d, errors.New(T("err.outOfRange"))
 		}
 	}
+	for _, c := range d.Colors {
+		if c.Power > 100 || c.Speed < 0 || c.Speed > 100 {
+			return d, fmt.Errorf(T("err.colorRange"), strings.ToUpper(c.RGB))
+		}
+	}
+	// Valeurs remplacées : conversion faite, mais signalée.
 	if d.DPI <= 0 || d.DPI > 2400 {
+		d.note("rem.dpi", d.DPI)
 		d.DPI = 600
+	}
+	if d.Mode != 1 {
+		if f := d.FreqPercent(); (!d.IsFusion && (d.FreqRaw < 10 || d.FreqRaw > 5000)) || (d.IsFusion && float64(d.FreqRaw) != f) {
+			d.note("rem.freq", d.FreqRaw, fnum(math.Round(f*10)/10))
+		}
+	}
+	if d.EngFreq > 100 {
+		d.note("rem.freq", d.EngFreq, "100")
+		d.EngFreq = 100
+	}
+	for i, c := range d.Colors {
+		f := FreqToPercent(c.Freq)
+		bad := c.Freq < 10 || c.Freq > 5000
+		if L.FreqPct {
+			f, bad = pct(float64(c.Freq)), c.Freq < 1 || c.Freq > 100
+		}
+		if bad && (c.Cut || c.Engrave) {
+			d.note("rem.colorFreq", strings.ToUpper(c.RGB), c.Freq, fnum(math.Round(f*10)/10))
+			if L.FreqPct {
+				d.Colors[i].Freq = int(f)
+			}
+		}
+	}
+	switch {
+	case d.Position == 3:
+		d.note("rem.pageCenter")
+	case d.Position < -1 || d.Position > 3:
+		d.note("rem.position", d.Position)
+	}
+	if d.Thickness < 0 {
+		d.note("rem.thickness")
+		d.Thickness = 0
+	}
+	if d.Passes > 1 {
+		d.note("rem.passes", d.Passes)
 	}
 	return d, nil
 }
 
 // ListDats : fichiers .DAT du dossier (et des sous-dossiers si demandé).
 func ListDats(dir string, recursive bool) ([]string, error) {
-	var out []string
+	out, _, err := listDats(dir, recursive)
+	return out, err
+}
+
+// listDats : idem, avec les sous-dossiers illisibles (« chemin : erreur »).
+func listDats(dir string, recursive bool) (out, unreadable []string, err error) {
 	if recursive {
 		err := filepath.WalkDir(dir, func(p string, e os.DirEntry, err error) error {
 			if err != nil {
+				if p == dir {
+					return err
+				}
+				unreadable = append(unreadable, Tf("skip.fmt", p, Tf("skip.unreadableDir", err)))
 				return nil
 			}
 			if !e.IsDir() && strings.EqualFold(filepath.Ext(p), ".dat") {
@@ -399,12 +460,12 @@ func ListDats(dir string, recursive bool) ([]string, error) {
 			return nil
 		})
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	} else {
 		ents, err := os.ReadDir(dir)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		for _, e := range ents {
 			if !e.IsDir() && strings.EqualFold(filepath.Ext(e.Name()), ".dat") {
@@ -413,7 +474,7 @@ func ListDats(dir string, recursive bool) ([]string, error) {
 		}
 	}
 	sort.Slice(out, func(i, j int) bool { return foldKey(out[i]) < foldKey(out[j]) })
-	return out, nil
+	return out, unreadable, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -651,6 +712,17 @@ type Result struct {
 	FolderID  int64
 }
 
+// Noted : nombre de réglages convertis avec au moins une remarque.
+func (r Result) Noted() int {
+	n := 0
+	for _, d := range r.Converted {
+		if len(d.Notes) > 0 {
+			n++
+		}
+	}
+	return n
+}
+
 var ErrFolderExists = errors.New("folder exists")
 
 // CheckLaser : la source choisie (CO2 ou Fibre) doit exister sur la machine.
@@ -776,15 +848,19 @@ func Convert(db DB, o Options, logf func(string), progress func(done, total int)
 	if err := CheckLaser(o); err != nil {
 		return res, err
 	}
-	paths, err := ListDats(o.DatDir, o.Recursive)
+	paths, unreadable, err := listDats(o.DatDir, o.Recursive)
 	if err != nil {
 		return res, fmt.Errorf(T("err.readDir"), err)
+	}
+	for _, u := range unreadable {
+		res.Skipped = append(res.Skipped, u)
+		logf("  ⚠ " + u)
 	}
 	if len(paths) == 0 {
 		return res, errors.New(T("err.noDat"))
 	}
 	var dats []DatFile
-	seen := map[string]bool{}
+	seen := map[string][32]byte{} // nom (sans casse ni accents) -> contenu
 	for _, p := range paths {
 		d, err := ParseDat(p)
 		if err != nil {
@@ -804,11 +880,21 @@ func Convert(db DB, o Options, logf func(string), progress func(done, total int)
 			continue
 		}
 		key := foldKey(d.Name)
-		if seen[key] {
-			res.Skipped = append(res.Skipped, Tf("skip.fmt", d.Name, T("skip.dup")))
-			continue
+		if sum, ok := seen[key]; ok {
+			if sum == d.Sum {
+				res.Skipped = append(res.Skipped, Tf("skip.fmt", d.Name, T("skip.dup")))
+				continue
+			}
+			// même nom, réglages différents : les deux sont gardés
+			orig := d.Name
+			for n := 2; ok; n++ {
+				d.Name = fmt.Sprintf("%s (%d)", orig, n)
+				_, ok = seen[foldKey(d.Name)]
+			}
+			d.note("rem.renamed", orig)
+			key = foldKey(d.Name)
 		}
-		seen[key] = true
+		seen[key] = d.Sum
 		dats = append(dats, d)
 	}
 	if len(dats) == 0 {
@@ -969,7 +1055,7 @@ func Convert(db DB, o Options, logf func(string), progress func(done, total int)
 				p.name, p.vp, p.vs, p.passes = cn, c.Power, c.Speed, 1
 				cf := FreqToPercent(c.Freq)
 				if d.Layout.FreqPct {
-					cf = math.Max(1, math.Min(100, float64(c.Freq)))
+					cf = pct(float64(c.Freq))
 				}
 				p.vf = fnum(math.Round(cf*1e4) / 1e4)
 				if c.HasAir {
@@ -985,7 +1071,7 @@ func Convert(db DB, o Options, logf func(string), progress func(done, total int)
 				p.query = colorQuery("gt", c.RGB)
 				setFusion(&p)
 				if cl == 1 && d.Layout.FreqPct {
-					p.rfreq = strconv.Itoa(c.Freq)
+					p.rfreq = fnum(pct(float64(c.Freq)))
 				}
 				cps += p.xml()
 			}
@@ -1030,9 +1116,15 @@ func Convert(db DB, o Options, logf func(string), progress func(done, total int)
 			return res, fmt.Errorf(T("err.addSetting"), d.Name, err)
 		}
 		res.Converted = append(res.Converted, d)
+		for _, n := range d.Notes {
+			logf(Tf("log.note", d.Name, n))
+		}
 		if progress != nil {
 			progress(i+1, len(rows))
 		}
+	}
+	if n := res.Noted(); n > 0 {
+		logf(Tf("log.warnings", n))
 	}
 	for _, t := range []string{"Settings", "MaterialFolders", "MaterialSubfolders"} {
 		db.Exec(`UPDATE sqlite_sequence SET seq=(SELECT MAX(ID) FROM `+t+`) WHERE name=?`, t)
@@ -1072,12 +1164,10 @@ func WriteRecap(path string, o Options, res Result) error {
 		if d.Stamp {
 			rem = append(rem, T("rem.stamp"))
 		}
-		if d.Passes > 1 {
-			rem = append(rem, Tf("rem.passes", d.Passes))
-		}
 		if len(d.Colors) > 0 {
 			rem = append(rem, Tf("rem.colors", len(d.Colors)))
 		}
+		rem = append(rem, d.Notes...)
 		gs, gp, cs, cp, cf := "", "", "", "", ""
 		if d.Mode != 0 {
 			gs, gp = strconv.Itoa(d.RSpeed), strconv.Itoa(d.RPower)

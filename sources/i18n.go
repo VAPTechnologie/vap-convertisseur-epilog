@@ -731,6 +731,59 @@ var tr = map[string][nLang]string{
 		"%d passes (lu dans le nom)", "%d passes (read from the name)", "%d pasadas (leído del nombre)", "%d Durchgänge (aus dem Namen)",
 		"%d passate (dal nome)", "%d passagens (lido do nome)", "%d doorgangen (uit de naam)", "%d 遍（取自名称）", "%d パス（名前から読み取り）",
 	},
+	"rem.dpi": {
+		"résolution %d invalide, remplacée par 600 dpi", "invalid resolution %d, replaced with 600 dpi", "resolución %d no válida, sustituida por 600 dpi",
+		"ungültige Auflösung %d, ersetzt durch 600 dpi", "risoluzione %d non valida, sostituita con 600 dpi", "resolução %d inválida, substituída por 600 dpi",
+		"ongeldige resolutie %d, vervangen door 600 dpi", "分辨率 %d 无效，已替换为 600 dpi", "解像度 %d は無効のため 600 dpi に置き換え",
+	},
+	"rem.freq": {
+		"fréquence %d hors plage, ramenée à %s %%", "frequency %d out of range, set to %s %%", "frecuencia %d fuera de rango, ajustada a %s %%",
+		"Frequenz %d außerhalb des Bereichs, auf %s %% gesetzt", "frequenza %d fuori intervallo, portata a %s %%", "frequência %d fora da faixa, ajustada para %s %%",
+		"frequentie %d buiten bereik, ingesteld op %s %%", "频率 %d 超出范围，已调整为 %s %%", "周波数 %d が範囲外のため %s %% に調整",
+	},
+	"rem.colorFreq": {
+		"couleur #%s : fréquence %d hors plage, ramenée à %s %%", "color #%s: frequency %d out of range, set to %s %%", "color #%s: frecuencia %d fuera de rango, ajustada a %s %%",
+		"Farbe #%s: Frequenz %d außerhalb des Bereichs, auf %s %% gesetzt", "colore #%s: frequenza %d fuori intervallo, portata a %s %%", "cor #%s: frequência %d fora da faixa, ajustada para %s %%",
+		"kleur #%s: frequentie %d buiten bereik, ingesteld op %s %%", "颜色 #%s：频率 %d 超出范围，已调整为 %s %%", "色 #%s：周波数 %d が範囲外のため %s %% に調整",
+	},
+	"rem.pageCenter": {
+		"position « Page-Centre » sans équivalent : aucun centrage", "\"Page-Center\" position has no equivalent: no centering", "posición «Página-Centro» sin equivalente: sin centrado",
+		"Position „Seite-Mitte“ ohne Entsprechung: keine Zentrierung", "posizione «Pagina-Centro» senza equivalente: nessuna centratura", "posição \"Página-Centro\" sem equivalente: sem centralização",
+		"positie 'Pagina-Midden' zonder equivalent: niet gecentreerd", "“页面居中”位置无对应项：不居中", "「ページ中央」位置に相当する設定なし：センタリングなし",
+	},
+	"rem.position": {
+		"position du travail inconnue (%d) : aucun centrage", "unknown job position (%d): no centering", "posición del trabajo desconocida (%d): sin centrado",
+		"unbekannte Auftragsposition (%d): keine Zentrierung", "posizione del lavoro sconosciuta (%d): nessuna centratura", "posição do trabalho desconhecida (%d): sem centralização",
+		"onbekende taakpositie (%d): niet gecentreerd", "未知的作业位置 (%d)：不居中", "不明なジョブ位置 (%d)：センタリングなし",
+	},
+	"rem.thickness": {
+		"épaisseur autofocus négative ignorée", "negative autofocus thickness ignored", "espesor de autofoco negativo ignorado",
+		"negative Autofokus-Dicke ignoriert", "spessore autofocus negativo ignorato", "espessura de autofoco negativa ignorada",
+		"negatieve autofocusdikte genegeerd", "已忽略负的自动对焦厚度", "負のオートフォーカス厚さを無視",
+	},
+	"rem.renamed": {
+		"renommé : même nom que « %s » mais réglages différents", "renamed: same name as \"%s\" but different settings", "renombrado: mismo nombre que «%s» pero ajustes diferentes",
+		"umbenannt: gleicher Name wie „%s“, aber andere Einstellungen", "rinominato: stesso nome di «%s» ma impostazioni diverse", "renomeado: mesmo nome que \"%s\" mas configurações diferentes",
+		"hernoemd: zelfde naam als '%s' maar andere instellingen", "已重命名：与“%s”同名但设置不同", "名前を変更：「%s」と同名ですが設定が異なります",
+	},
+	"err.colorRange": {
+		"gestion des couleurs : puissance ou vitesse hors limites (couleur #%s)", "color mapping: power or speed out of range (color #%s)", "gestión de colores: potencia o velocidad fuera de rango (color #%s)",
+		"Farbzuordnung: Leistung oder Geschwindigkeit außerhalb des Bereichs (Farbe #%s)", "gestione colori: potenza o velocità fuori limite (colore #%s)", "gestão de cores: potência ou velocidade fora dos limites (cor #%s)",
+		"kleurbeheer: vermogen of snelheid buiten bereik (kleur #%s)", "颜色管理：功率或速度超出范围（颜色 #%s）", "カラー管理：出力または速度が範囲外（色 #%s）",
+	},
+	"skip.unreadableDir": {
+		"dossier illisible (%v)", "unreadable folder (%v)", "carpeta ilegible (%v)", "Ordner nicht lesbar (%v)", "cartella illeggibile (%v)",
+		"pasta ilegível (%v)", "map onleesbaar (%v)", "文件夹无法读取（%v）", "フォルダーを読み込めません（%v）",
+	},
+	"log.note": {
+		"  ℹ %s : %s", "  ℹ %s: %s", "  ℹ %s: %s", "  ℹ %s: %s", "  ℹ %s: %s", "  ℹ %s: %s", "  ℹ %s: %s", "  ℹ %s：%s", "  ℹ %s：%s",
+	},
+	"log.warnings": {
+		"%d réglage(s) converti(s) avec une remarque : voir le récapitulatif.", "%d setting(s) converted with a note: see the summary.",
+		"%d ajuste(s) convertido(s) con una observación: vea el resumen.", "%d Einstellung(en) mit Hinweis konvertiert: siehe Übersicht.",
+		"%d impostazione/i convertita/e con una nota: vedere il riepilogo.", "%d configuração(ões) convertida(s) com uma observação: veja o resumo.",
+		"%d instelling(en) geconverteerd met een opmerking: zie het overzicht.", "%d 项设置转换时有备注：请查看汇总。", "%d 件の設定に注記があります：一覧を確認してください。",
+	},
 	"rem.colors": {
 		"Gestion des couleurs : %d couleurs", "Color mapping: %d colors", "Gestión de colores: %d colores", "Farbzuordnung: %d Farben",
 		"Gestione colori: %d colori", "Gestão de cores: %d cores", "Kleurbeheer: %d kleuren", "颜色管理：%d 种颜色", "カラー管理：%d 色",
