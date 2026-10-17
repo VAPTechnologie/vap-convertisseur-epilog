@@ -382,3 +382,33 @@ func TestConversionDossiers(t *testing.T) {
 		}
 	})
 }
+
+func TestRecapitulatif(t *testing.T) {
+	c := newConv(t)
+	b := set32(set32(fakeDat(3156, "Epilog Engraver Win32 Fusion"), fusLaser, 1), 792, 1)
+	o := colorTable
+	b[o], b[o+3] = 0xff, 70
+	b = set32(b, o+4, 25)
+	b = set32(b, o+8, 40)
+	b = set32(b, o+20, 1)
+	c.add("Inox 2 passes", b)
+	c.add("Taille inconnue", fakeDat(3000, "Epilog Engraver Win32 Mini"))
+	if _, _, err := c.run(mDual, false); err != nil {
+		t.Fatal(err)
+	}
+	recaps, _ := filepath.Glob(filepath.Join(filepath.Dir(c.dats), "*", T("file.recap")))
+	if len(recaps) != 1 {
+		t.Fatal("récapitulatif absent")
+	}
+	csv, _ := os.ReadFile(recaps[0])
+	for _, want := range []string{"Source laser", "Fibre", "#FF0000 : puissance 70 %, vitesse 25 %, fréquence 40,0 %, Fibre", "2 passes (lu dans le nom)", "Taille inconnue"} {
+		if !strings.Contains(string(csv), want) {
+			t.Errorf("%q absent du récapitulatif :\n%s", want, csv)
+		}
+	}
+	for i, l := range strings.Split(strings.TrimSpace(string(csv)), "\r\n") {
+		if n := strings.Count(l, ";"); n != 11 && !strings.Contains(l, `"`) {
+			t.Errorf("ligne %d : %d séparateurs", i+1, n)
+		}
+	}
+}
