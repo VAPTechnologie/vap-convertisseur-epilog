@@ -154,6 +154,16 @@ func (d DatFile) NeedsFiber() bool {
 	return false
 }
 
+// laser : source des procédés généraux (0 CO2, 1 Fibre) : celle choisie, ou
+// Fibre si le .DAT Fusion la demande (les .DAT Fibre vers une machine sans
+// Fibre sont écartés avant la conversion).
+func (d DatFile) laser(o Options) int {
+	if o.Fiber || d.Fiber {
+		return 1
+	}
+	return 0
+}
+
 // Known : la mise en page du .DAT a été relevée sur le driver d'origine.
 func (d DatFile) Known() bool { return d.Layout != nil }
 
@@ -987,10 +997,6 @@ func Convert(db DB, o Options, logf func(string), progress func(done, total int)
 		sid = toInt(r2[0][0])
 	}
 
-	laser := 0
-	if o.Fiber {
-		laser = 1
-	}
 	// Assistance d'air sur Marche pour toutes les découpes (décision VAP, sécurité) :
 	// imposée ici, pas seulement dans l'interface.
 	air := 1
@@ -1019,12 +1025,7 @@ func Convert(db DB, o Options, logf func(string), progress func(done, total int)
 		th := ThicknessMils(d.Name)
 		vf := fnum(math.Round(d.FreqPercent()*1e4) / 1e4)
 		vsort, dith, ord := d.JMSort(o.VectorSort), d.JMDither(), b2i(d.Bottom)
-		// Fusion : source Fibre du .DAT (les .DAT Fibre vers une machine sans Fibre
-		// ont été écartés plus haut).
-		dl := laser
-		if d.Fiber {
-			dl = 1
-		}
+		dl := d.laser(o)
 		grav := proc{name: en, ptype: 1, thick: 0, rp: d.RPower, rs: d.RSpeed, dpi: d.DPI, vp: 50, vs: 50, vf: "50", air: 0, sort: vsort, pulse: "-1", laser: dl, dither: dith, order: ord}
 		cut := proc{name: en, ptype: 2, thick: th, rp: 100, rs: 15, dpi: d.DPI, vp: d.VPower, vs: d.VSpeed, vf: vf, air: air, sort: vsort, pulse: "-1", laser: dl, dither: dith, order: ord}
 		if dl == 1 && d.EngFreq > 0 {
@@ -1175,6 +1176,18 @@ func WriteRecap(path string, o Options, res Result) error {
 		if len(d.Colors) > 0 {
 			rem = append(rem, Tf("rem.colors", len(d.Colors)))
 		}
+		srcName := func(l int) string { return T([]string{"laser.co2", "laser.fiber"}[l]) }
+		for _, c := range d.Colors {
+			if !(c.Cut && d.Mode != 1 || c.Engrave && d.Mode != 0) {
+				continue
+			}
+			f := FreqToPercent(c.Freq)
+			if d.Layout.FreqPct {
+				f = pct(float64(c.Freq))
+			}
+			rem = append(rem, Tf("rem.colorDetail", strings.ToUpper(c.RGB), c.Power, c.Speed,
+				strings.ReplaceAll(strconv.FormatFloat(f, 'f', 1, 64), ".", dec), srcName(max(d.laser(o), b2i(c.Fiber)))))
+		}
 		rem = append(rem, d.Notes...)
 		gs, gp, cs, cp, cf := "", "", "", "", ""
 		if d.Mode != 0 {
@@ -1184,18 +1197,26 @@ func WriteRecap(path string, o Options, res Result) error {
 			cs, cp = strconv.Itoa(d.VSpeed), strconv.Itoa(d.VPower)
 			cf = strings.ReplaceAll(strconv.FormatFloat(d.FreqPercent(), 'f', 1, 64), ".", dec)
 		}
+		// même épaisseur que la conversion : celle de l'autofocus Fusion, sinon le nom
 		th := ""
-		if t := ThicknessMils(d.Name); t > 0 && d.Mode != 1 {
+		t := ThicknessMils(d.Name)
+		if d.Mode == 1 {
+			t = 0
+		}
+		if d.Thickness > 0 {
+			t = mmToMils(d.Thickness)
+		}
+		if t > 0 {
 			th = strings.ReplaceAll(strconv.FormatFloat(t*25.4/1000, 'f', 2, 64), ".", dec)
 		}
-		f := []string{subName[Classify(d.Name)], d.Name, d.ModeLabel(), strconv.Itoa(d.DPI), gs, gp, cs, cp, cf, th, strings.Join(rem, " / ")}
+		f := []string{subName[Classify(d.Name)], d.Name, d.ModeLabel(), strconv.Itoa(d.DPI), gs, gp, cs, cp, cf, th, srcName(d.laser(o)), strings.Join(rem, " / ")}
 		for i := range f {
 			f[i] = esc(f[i])
 		}
 		sb.WriteString(strings.Join(f, sep) + "\r\n")
 	}
 	for _, s := range res.Skipped {
-		f := []string{"", esc(s), T("csv.skipped"), "", "", "", "", "", "", "", ""}
+		f := []string{"", esc(s), T("csv.skipped"), "", "", "", "", "", "", "", "", ""}
 		sb.WriteString(strings.Join(f, sep) + "\r\n")
 	}
 	return os.WriteFile(path, []byte(sb.String()), 0o644)

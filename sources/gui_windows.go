@@ -935,7 +935,9 @@ func (a *app) convert() {
 	}
 
 	a.busy = true
-	for _, id := range []int{idConvert, idDatBrowse, idBkBrowse, idOpen} {
+	// options, langue et machine figées pendant la conversion
+	locked := []int{idConvert, idDatBrowse, idBkBrowse, idOpen, idDatEdit, idBkEdit, idRecursive, idMachine, idFolderName, idSort, idTop, idLaser, idLang}
+	for _, id := range locked {
 		enable(a.ctl[id], false)
 	}
 	wait, _, _ := pLoadCursorW.Call(0, 32514)
@@ -948,9 +950,12 @@ func (a *app) convert() {
 		pumpMessages()
 	})
 	a.busy = false
-	for _, id := range []int{idConvert, idDatBrowse, idBkBrowse} {
-		enable(a.ctl[id], true)
+	for _, id := range locked {
+		if id != idOpen {
+			enable(a.ctl[id], true)
+		}
 	}
+	enable(a.ctl[idLaser], o.Machine.HasCO2() && o.Machine.HasFiber())
 	arrow, _, _ := pLoadCursorW.Call(0, 32512)
 	pSetCursor.Call(arrow)
 	if err != nil {
@@ -975,7 +980,15 @@ func (a *app) convert() {
 	enable(a.ctl[idOpen], true)
 	a.log(Tf("log.done", len(res.Converted), len(res.Skipped)))
 	a.log(T("log.outDir") + out)
-	if msgBox(a.hwnd, Tf("msg.done", len(res.Converted), folder), T("msg.title"), mbYesNo|mbIconInfo) == idYes {
+	done := Tf("msg.done", len(res.Converted), folder)
+	if n := res.Noted(); n > 0 || len(res.Skipped) > 0 {
+		// bilan inséré avant la question finale (« Ouvrir le dossier maintenant ? »)
+		sum := Tf("msg.summary", len(res.Converted)-n, n, len(res.Skipped))
+		if i := strings.LastIndex(done, "\n\n"); i >= 0 {
+			done = done[:i] + sum + done[i:]
+		}
+	}
+	if msgBox(a.hwnd, done, T("msg.title"), mbYesNo|mbIconInfo) == idYes {
 		a.openOut()
 	}
 }

@@ -2,6 +2,21 @@
 
 Le VAP Convertisseur Epilog reprend les anciens réglages des pilotes Epilog (fichiers .DAT) et les range automatiquement dans Epilog Job Manager. Vos années de réglages matières passent dans Job Manager en un clic, sans rien ressaisir.
 
+## Prochaine version (en préparation)
+
+Un réglage incomplet ou incompatible ne peut plus passer pour une conversion fidèle.
+
+- **Source CO2 / Fibre contrôlée** : elle est imposée quand la machine n'en a qu'une. Un réglage Fibre n'est jamais envoyé vers une machine sans Fibre : il est ignoré avec un message clair.
+- **Fichiers inconnus refusés** : un .DAT dont la structure ne correspond à aucun pilote relevé n'est plus converti avec des valeurs de remplacement.
+- **Remarques visibles** : chaque valeur remplacée ou non reprise (résolution, fréquence, position « Page-Centre », passes lues dans le nom…) est indiquée dans le journal et le récapitulatif. Une puissance ou une vitesse de couleur hors limites fait refuser le réglage.
+- **Doublons** : deux réglages de même nom mais différents sont gardés tous les deux, le second renommé « nom (2) ».
+- **Dossiers Job Manager** : le dossier remplacé est celui de la machine choisie, et les sous-dossiers Métal, Bois, Plastique sont retrouvés par leur nom.
+- **Assistance d'air** : réellement imposée sur Marche pour toutes les découpes.
+- **Bilan final** : réglages convertis sans remarque, avec remarque, et fichiers ignorés. Le récapitulatif indique la source laser et le détail des couleurs.
+- **Rapport d'erreur** : votre dossier personnel Windows y est masqué, et il s'ouvre pour être relu avant l'envoi.
+- **Sécurité** : seule la bibliothèque SQLite de Windows est chargée.
+- **Tests** : à chaque modification, des conversions complètes sur des fichiers de test inclus dans le dépôt.
+
 ## Version 1.7 — octobre 2026
 
 Un programme plus léger, et vérifié automatiquement à chaque modification.
