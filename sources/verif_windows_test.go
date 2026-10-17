@@ -344,7 +344,7 @@ func TestVerifReglages(t *testing.T) {
 			}
 			defer db.Close()
 			folder := "TEST " + filepath.Base(dir)
-			o := Options{DatDir: dir, Machine: m, FolderName: folder, AirAssistCut: true, VectorSort: SortFromDat, OnTop: true, ReplaceFolder: true, Fiber: !m.HasCO2()}
+			o := Options{DatDir: dir, Machine: m, FolderName: folder, VectorSort: SortFromDat, OnTop: true, ReplaceFolder: true, Fiber: !m.HasCO2()}
 			res, err := Convert(db, o, func(string) {}, nil)
 			if err != nil {
 				t.Fatal(err)

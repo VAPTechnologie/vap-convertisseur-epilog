@@ -451,6 +451,17 @@ var tr = map[string][nLang]string{
 		"转换失败：\n\n",
 		"変換に失敗しました：\n\n",
 	},
+	"rep.privacy": {
+		"\n\nCe rapport contient les noms de vos fichiers .DAT, de vos machines et de vos dossiers Job Manager. Votre dossier personnel Windows y est masqué. Il s'ouvre pour que vous puissiez le relire avant l'envoi.",
+		"\n\nThis report contains the names of your .DAT files, machines and Job Manager folders. Your Windows personal folder is masked. It opens so you can review it before sending.",
+		"\n\nEste informe contiene los nombres de sus archivos .DAT, máquinas y carpetas de Job Manager. Su carpeta personal de Windows está oculta. Se abrirá para que pueda revisarlo antes de enviarlo.",
+		"\n\nDieser Bericht enthält die Namen Ihrer .DAT-Dateien, Maschinen und Job-Manager-Ordner. Ihr persönlicher Windows-Ordner ist ausgeblendet. Er wird geöffnet, damit Sie ihn vor dem Senden prüfen können.",
+		"\n\nQuesto rapporto contiene i nomi dei file .DAT, delle macchine e delle cartelle Job Manager. La cartella personale di Windows è mascherata. Si apre per poterlo rileggere prima dell'invio.",
+		"\n\nEste relatório contém os nomes dos seus arquivos .DAT, máquinas e pastas do Job Manager. Sua pasta pessoal do Windows é ocultada. Ele será aberto para que você possa revisá-lo antes do envio.",
+		"\n\nDit rapport bevat de namen van uw .DAT-bestanden, machines en Job Manager-mappen. Uw persoonlijke Windows-map is verborgen. Het wordt geopend zodat u het kunt nalezen voor het verzenden.",
+		"\n\n此报告包含您的 .DAT 文件、机器和 Job Manager 文件夹的名称。您的 Windows 个人文件夹已被隐藏。报告将被打开，以便您在发送前查看。",
+		"\n\nこのレポートには .DAT ファイル、マシン、Job Manager フォルダーの名前が含まれます。Windows の個人フォルダーは伏せられています。送信前に確認できるよう開きます。",
+	},
 	"ask.sendReport": {
 		"\n\nUn rapport d'erreur a été enregistré :\n%s\n\nL'envoyer à VAP par e-mail ? (le fichier sera sélectionné pour le joindre)",
 		"\n\nAn error report has been saved:\n%s\n\nSend it to VAP by e-mail? (the file will be selected so you can attach it)",

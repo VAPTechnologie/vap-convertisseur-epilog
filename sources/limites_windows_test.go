@@ -59,7 +59,7 @@ func setupLimites(t *testing.T) limEnv {
 }
 
 func (e limEnv) opts(dat string) Options {
-	return Options{DatDir: dat, Machine: e.mach, FolderName: "TEST limites", AirAssistCut: true, VectorSort: 1, OnTop: true, ReplaceFolder: true}
+	return Options{DatDir: dat, Machine: e.mach, FolderName: "TEST limites", VectorSort: 1, OnTop: true, ReplaceFolder: true}
 }
 
 func writeDat(t *testing.T, dir, name string, b []byte) string {

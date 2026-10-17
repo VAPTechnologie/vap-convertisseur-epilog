@@ -477,6 +477,7 @@ func (a *app) buildUI() {
 	enable(a.ctl[idOpen], false)
 
 	send(a.ctl[idAir], bmSetCheck, 1, 0)
+	enable(a.ctl[idAir], false) // imposée par le moteur, affichée pour information
 	send(a.ctl[idTop], bmSetCheck, 1, 0)
 	send(a.ctl[idProgress], pbmSetRange32, 0, 100)
 	send(a.ctl[idProgress], pbmSetBarColor, 0, colAccent)
@@ -913,7 +914,6 @@ func (a *app) convert() {
 		Recursive:    a.checked(idRecursive),
 		Machine:      a.machines[sel],
 		FolderName:   folder,
-		AirAssistCut: a.checked(idAir),
 		VectorSort:   int(int32(send(a.ctl[idSort], cbGetCurSel, 0, 0))),
 		OnTop:        a.checked(idTop),
 		Fiber:        send(a.ctl[idLaser], cbGetCurSel, 0, 0) == 1,
@@ -964,7 +964,8 @@ func (a *app) convert() {
 		}
 		a.report = rp
 		a.log(T("log.report") + rp)
-		if msgBox(a.hwnd, T("err.convFailed")+err.Error()+Tf("ask.sendReport", rp), T("msg.title"), mbYesNo|mbIconError) == idYes {
+		if msgBox(a.hwnd, T("err.convFailed")+err.Error()+Tf("ask.sendReport", rp)+T("rep.privacy"), T("msg.title"), mbYesNo|mbIconError) == idYes {
+			pShellExecuteW.Call(a.hwnd, wp("open"), wp(rp), 0, 0, 1) // relecture avant envoi
 			a.sendSuggestion()
 		}
 		return

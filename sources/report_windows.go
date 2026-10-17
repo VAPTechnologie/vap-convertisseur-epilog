@@ -3,8 +3,7 @@
 package main
 
 // Informations système du rapport d'erreur : version de Windows, programme,
-// bibliothèque SQLite utilisée (celle de Windows ou un sqlite3.dll à côté du
-// programme, qui passe en priorité).
+// bibliothèque SQLite utilisée (toujours celle du dossier système).
 
 import (
 	"fmt"
@@ -55,7 +54,7 @@ func reportSystem() []string {
 	exe, _ := os.Executable()
 	local := "non"
 	if _, err := os.Stat(filepath.Join(filepath.Dir(exe), "sqlite3.dll")); err == nil {
-		local = "OUI (utilisé en priorité)"
+		local = "oui (ignoré)"
 	}
 	return []string{
 		"Windows : " + windowsVersion(),

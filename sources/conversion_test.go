@@ -103,7 +103,7 @@ func (c *convCase) run(m Machine, fiber bool) (Result, map[string]string, error)
 		b, _ := os.ReadFile(p)
 		sums[p] = sha256.Sum256(b)
 	}
-	o := Options{DatDir: c.dats, Machine: machineIn(c.t, c.base, m.ID), FolderName: m.Name, AirAssistCut: true, VectorSort: 1, OnTop: true, Fiber: fiber}
+	o := Options{DatDir: c.dats, Machine: machineIn(c.t, c.base, m.ID), FolderName: m.Name, VectorSort: 1, OnTop: true, Fiber: fiber}
 	out, res, err := Run(openTestDB, c.base, o, func(string) {}, nil)
 	for p, s := range sums {
 		if b, _ := os.ReadFile(p); sha256.Sum256(b) != s {
@@ -278,7 +278,7 @@ func TestConversionDoublons(t *testing.T) {
 	os.WriteFile(filepath.Join(c.dats, "B", "BOIS 3 MM.DAT"), mini, 0o644)                 // même contenu
 	os.WriteFile(filepath.Join(c.dats, "C", "Bois 3 mm.DAT"), set32(mini, 264, 90), 0o644) // autre puissance
 	db0 := c.base
-	o := Options{DatDir: c.dats, Recursive: true, Machine: machineIn(t, db0, mCO2.ID), FolderName: "Doublons", AirAssistCut: true, VectorSort: 1}
+	o := Options{DatDir: c.dats, Recursive: true, Machine: machineIn(t, db0, mCO2.ID), FolderName: "Doublons", VectorSort: 1}
 	_, res, err := Run(openTestDB, db0, o, func(string) {}, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -309,7 +309,7 @@ func TestConversionRemplacement(t *testing.T) {
 	if _, _, err := c.run(mCO2, false); !errors.Is(err, ErrFolderExists) {
 		t.Fatalf("dossier existant : %v", err)
 	}
-	o := Options{DatDir: c.dats, Machine: machineIn(t, c.base, mCO2.ID), FolderName: mCO2.Name, AirAssistCut: true, VectorSort: 1, ReplaceFolder: true}
+	o := Options{DatDir: c.dats, Machine: machineIn(t, c.base, mCO2.ID), FolderName: mCO2.Name, VectorSort: 1, ReplaceFolder: true}
 	out, res, err := Run(openTestDB, c.base, o, func(string) {}, nil)
 	if err != nil || len(res.Converted) != 2 {
 		t.Fatalf("remplacement : %v, %d", err, len(res.Converted))

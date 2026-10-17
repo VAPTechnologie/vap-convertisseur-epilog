@@ -699,7 +699,6 @@ type Options struct {
 	Recursive     bool
 	Machine       Machine
 	FolderName    string
-	AirAssistCut  bool
 	VectorSort    int // 0 aucun, 1 intérieur vers extérieur, 2 optimisé, 3 comme le .DAT
 	OnTop         bool
 	Fiber         bool
@@ -992,10 +991,9 @@ func Convert(db DB, o Options, logf func(string), progress func(done, total int)
 	if o.Fiber {
 		laser = 1
 	}
-	air := 0
-	if o.AirAssistCut {
-		air = 1
-	}
+	// Assistance d'air sur Marche pour toutes les découpes (décision VAP, sécurité) :
+	// imposée ici, pas seulement dans l'interface.
+	air := 1
 	H := fnum(o.Machine.H)
 	W := fnum(o.Machine.W)
 	now := time.Now().Unix()
@@ -1071,9 +1069,6 @@ func Convert(db DB, o Options, logf func(string), progress func(done, total int)
 					cf = pct(float64(c.Freq))
 				}
 				p.vf = fnum(math.Round(cf*1e4) / 1e4)
-				if c.HasAir {
-					p.air = max(air, b2i(c.Air))
-				}
 				p.query = colorQuery("lte", c.RGB)
 				setFusion(&p)
 				cps += p.xml()

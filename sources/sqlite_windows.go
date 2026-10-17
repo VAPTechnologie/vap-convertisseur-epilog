@@ -2,13 +2,13 @@
 
 package main
 
-// Accès SQLite via winsqlite3.dll (fournie avec Windows 10/11),
-// ou sqlite3.dll placée à côté de l'exécutable en secours.
+// Accès SQLite via winsqlite3.dll, fournie avec Windows 10/11 et chargée
+// par son chemin complet dans le dossier système : un sqlite3.dll ou
+// winsqlite3.dll déposé à côté du programme n'est jamais chargé.
 
 import (
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -24,6 +24,8 @@ type sqliteLib struct {
 
 var sqlib *sqliteLib
 
+var pGetSystemDirectoryW = kernel32.NewProc("GetSystemDirectoryW")
+
 // DLL SQLite effectivement chargée (indiquée dans le rapport d'erreur)
 var sqliteDLL *syscall.LazyDLL
 
@@ -31,20 +33,13 @@ func loadSQLite() (*sqliteLib, error) {
 	if sqlib != nil {
 		return sqlib, nil
 	}
-	var dll *syscall.LazyDLL
-	cands := []string{}
-	if exe, err := os.Executable(); err == nil {
-		cands = append(cands, filepath.Join(filepath.Dir(exe), "sqlite3.dll"))
+	buf := make([]uint16, 260)
+	n, _, _ := pGetSystemDirectoryW.Call(uintptr(unsafe.Pointer(&buf[0])), uintptr(len(buf)))
+	if n == 0 || int(n) >= len(buf) {
+		return nil, errors.New(T("err.noSqlite"))
 	}
-	cands = append(cands, "winsqlite3.dll")
-	for _, c := range cands {
-		d := syscall.NewLazyDLL(c)
-		if d.Load() == nil {
-			dll = d
-			break
-		}
-	}
-	if dll == nil {
+	dll := syscall.NewLazyDLL(filepath.Join(syscall.UTF16ToString(buf[:n]), "winsqlite3.dll"))
+	if dll.Load() != nil {
 		return nil, errors.New(T("err.noSqlite"))
 	}
 	l := &sqliteLib{
