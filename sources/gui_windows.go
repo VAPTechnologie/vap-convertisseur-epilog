@@ -477,6 +477,7 @@ func (a *app) buildUI() {
 	enable(a.ctl[idOpen], false)
 
 	send(a.ctl[idAir], bmSetCheck, 1, 0)
+	enable(a.ctl[idAir], false) // imposée par le moteur, affichée pour information
 	send(a.ctl[idTop], bmSetCheck, 1, 0)
 	send(a.ctl[idProgress], pbmSetRange32, 0, 100)
 	send(a.ctl[idProgress], pbmSetBarColor, 0, colAccent)
@@ -760,9 +761,20 @@ func (a *app) countDats(autoLaser bool) {
 		return
 	}
 	setText(a.ctl[idDatInfo], Tf("info.count", len(ps)))
-	if autoLaser && strings.Contains(foldKey(dir), "fibre") || strings.Contains(foldKey(dir), "fiber") {
-		send(a.ctl[idLaser], cbSetCurSel, 1, 0)
+	// dossier « … fibre … » : Fibre proposée, si la machine choisie en a une
+	if autoLaser && (strings.Contains(foldKey(dir), "fibre") || strings.Contains(foldKey(dir), "fiber")) {
+		if m, ok := a.curMachine(); !ok || m.HasFiber() {
+			send(a.ctl[idLaser], cbSetCurSel, 1, 0)
+		}
 	}
+}
+
+func (a *app) curMachine() (Machine, bool) {
+	i := int(int32(send(a.ctl[idMachine], cbGetCurSel, 0, 0)))
+	if i < 0 || i >= len(a.machines) {
+		return Machine{}, false
+	}
+	return a.machines[i], true
 }
 
 // fixDatDir : si le dossier choisi est un dossier de résultat, propose le dossier source.
@@ -823,14 +835,20 @@ func (a *app) selectMachine(i int) {
 	send(a.ctl[idMachine], cbSetCurSel, uintptr(i), 0)
 	m := a.machines[i]
 	setText(a.ctl[idFolderName], m.Name)
-	if m.HasFiber() && !m.HasCO2() {
+	// source imposée quand la machine n'en a qu'une, au choix sinon
+	switch {
+	case !m.HasFiber():
+		send(a.ctl[idLaser], cbSetCurSel, 0, 0)
+	case !m.HasCO2():
 		send(a.ctl[idLaser], cbSetCurSel, 1, 0)
 	}
+	enable(a.ctl[idLaser], m.HasCO2() && m.HasFiber())
 }
 
 func (a *app) loadBackup(path string) {
 	send(a.ctl[idMachine], cbResetContent, 0, 0)
 	a.machines = nil
+	enable(a.ctl[idLaser], true)
 	db, err := openRO(path)
 	if err != nil {
 		msgBox(a.hwnd, T("err.openBackup")+err.Error(), T("msg.title"), mbIconError)
@@ -896,7 +914,6 @@ func (a *app) convert() {
 		Recursive:    a.checked(idRecursive),
 		Machine:      a.machines[sel],
 		FolderName:   folder,
-		AirAssistCut: a.checked(idAir),
 		VectorSort:   int(int32(send(a.ctl[idSort], cbGetCurSel, 0, 0))),
 		OnTop:        a.checked(idTop),
 		Fiber:        send(a.ctl[idLaser], cbGetCurSel, 0, 0) == 1,
@@ -906,7 +923,7 @@ func (a *app) convert() {
 	}
 	// dossier déjà présent ?
 	if db, err := openRO(bk); err == nil {
-		fid, _ := FindJobFolder(db, folder)
+		fid, _ := FindJobFolder(db, folder, o.Machine.ID)
 		db.Close()
 		if fid != 0 {
 			if msgBox(a.hwnd, Tf("ask.replace", folder),
@@ -918,7 +935,9 @@ func (a *app) convert() {
 	}
 
 	a.busy = true
-	for _, id := range []int{idConvert, idDatBrowse, idBkBrowse, idOpen} {
+	// options, langue et machine figées pendant la conversion
+	locked := []int{idConvert, idDatBrowse, idBkBrowse, idOpen, idDatEdit, idBkEdit, idRecursive, idMachine, idFolderName, idSort, idTop, idLaser, idLang}
+	for _, id := range locked {
 		enable(a.ctl[id], false)
 	}
 	wait, _, _ := pLoadCursorW.Call(0, 32514)
@@ -931,9 +950,12 @@ func (a *app) convert() {
 		pumpMessages()
 	})
 	a.busy = false
-	for _, id := range []int{idConvert, idDatBrowse, idBkBrowse} {
-		enable(a.ctl[id], true)
+	for _, id := range locked {
+		if id != idOpen {
+			enable(a.ctl[id], true)
+		}
 	}
+	enable(a.ctl[idLaser], o.Machine.HasCO2() && o.Machine.HasFiber())
 	arrow, _, _ := pLoadCursorW.Call(0, 32512)
 	pSetCursor.Call(arrow)
 	if err != nil {
@@ -947,7 +969,8 @@ func (a *app) convert() {
 		}
 		a.report = rp
 		a.log(T("log.report") + rp)
-		if msgBox(a.hwnd, T("err.convFailed")+err.Error()+Tf("ask.sendReport", rp), T("msg.title"), mbYesNo|mbIconError) == idYes {
+		if msgBox(a.hwnd, T("err.convFailed")+err.Error()+Tf("ask.sendReport", rp)+T("rep.privacy"), T("msg.title"), mbYesNo|mbIconError) == idYes {
+			pShellExecuteW.Call(a.hwnd, wp("open"), wp(rp), 0, 0, 1) // relecture avant envoi
 			a.sendSuggestion()
 		}
 		return
@@ -957,7 +980,15 @@ func (a *app) convert() {
 	enable(a.ctl[idOpen], true)
 	a.log(Tf("log.done", len(res.Converted), len(res.Skipped)))
 	a.log(T("log.outDir") + out)
-	if msgBox(a.hwnd, Tf("msg.done", len(res.Converted), folder), T("msg.title"), mbYesNo|mbIconInfo) == idYes {
+	done := Tf("msg.done", len(res.Converted), folder)
+	if n := res.Noted(); n > 0 || len(res.Skipped) > 0 {
+		// bilan inséré avant la question finale (« Ouvrir le dossier maintenant ? »)
+		sum := Tf("msg.summary", len(res.Converted)-n, n, len(res.Skipped))
+		if i := strings.LastIndex(done, "\n\n"); i >= 0 {
+			done = done[:i] + sum + done[i:]
+		}
+	}
+	if msgBox(a.hwnd, done, T("msg.title"), mbYesNo|mbIconInfo) == idYes {
 		a.openOut()
 	}
 }

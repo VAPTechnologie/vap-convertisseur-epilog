@@ -59,7 +59,7 @@ func setupLimites(t *testing.T) limEnv {
 }
 
 func (e limEnv) opts(dat string) Options {
-	return Options{DatDir: dat, Machine: e.mach, FolderName: "TEST limites", AirAssistCut: true, VectorSort: 1, OnTop: true, ReplaceFolder: true}
+	return Options{DatDir: dat, Machine: e.mach, FolderName: "TEST limites", VectorSort: 1, OnTop: true, ReplaceFolder: true}
 }
 
 func writeDat(t *testing.T, dir, name string, b []byte) string {
@@ -104,7 +104,7 @@ func (e limEnv) run(t *testing.T, dat string) (string, Result, error) {
 	return out, res, err
 }
 
-func settingNames(t *testing.T, out string) map[string]string {
+func settingNames(t *testing.T, out string, mid int64) map[string]string {
 	m, _ := filepath.Glob(filepath.Join(out, "*.epidb"))
 	if len(m) != 1 {
 		t.Fatalf("base convertie introuvable dans %s", out)
@@ -114,7 +114,7 @@ func settingNames(t *testing.T, out string) map[string]string {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	fid, _ := FindJobFolder(db, "TEST limites")
+	fid, _ := FindJobFolder(db, "TEST limites", mid)
 	rows, err := db.Query(`SELECT Name, ProcessSettings FROM Settings WHERE FolderID=?`, fid)
 	if err != nil {
 		t.Fatal(err)
@@ -168,9 +168,9 @@ func TestLimites(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		// "Coupe en deux" garde une taille > 900 octets : lu sans le détail du pilote
-		if len(res.Converted) != 3 || len(res.Skipped) != 7 {
-			t.Errorf("%d convertis / %d ignorés, attendu 3 / 7 : %v", len(res.Converted), len(res.Skipped), res.Skipped)
+		// "Coupe en deux" garde une taille > 900 octets mais n'a plus une structure connue : refusé
+		if len(res.Converted) != 2 || len(res.Skipped) != 8 {
+			t.Errorf("%d convertis / %d ignorés, attendu 2 / 8 : %v", len(res.Converted), len(res.Skipped), res.Skipped)
 		}
 	})
 
@@ -184,7 +184,7 @@ func TestLimites(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		got := settingNames(t, out)
+		got := settingNames(t, out, e.mach.ID)
 		for _, n := range names {
 			ps, ok := got[n]
 			if !ok {

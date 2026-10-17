@@ -1,9 +1,11 @@
 package main
 
 // Rapport d'erreur : écrit quand une conversion échoue, pour comprendre le
-// problème à distance sans la sauvegarde complète (45 Mo). Il ne contient que
-// des informations techniques : versions, structure de la base, liste des .DAT
-// et journal. Toujours en français, il est lu par VAP.
+// problème à distance sans la sauvegarde complète (45 Mo). Il contient les
+// versions, la structure de la base, les noms des machines et des dossiers
+// Job Manager, la liste des .DAT et le journal ; le dossier personnel Windows
+// (C:\Users\<nom>) y est remplacé par %USERPROFILE%. Toujours en français,
+// il est lu par VAP.
 
 import (
 	"crypto/sha256"
@@ -12,6 +14,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -172,8 +175,8 @@ func BuildReport(open func(string) (DB, error), in ReportInput) string {
 	}
 	w("Machine : %s (ID %d, laser %s, table %s)", m.Name, m.ID, m.LaserType, size)
 	w("Nom du dossier : %s", o.FolderName)
-	w("Assistance d'air en découpe : %s · tri des vecteurs : %d · en tête de liste : %s · source Fibre : %s · remplacer le dossier : %s",
-		yesNo(o.AirAssistCut), o.VectorSort, yesNo(o.OnTop), yesNo(o.Fiber), yesNo(o.ReplaceFolder))
+	w("Tri des vecteurs : %d · en tête de liste : %s · source Fibre : %s · remplacer le dossier : %s",
+		o.VectorSort, yesNo(o.OnTop), yesNo(o.Fiber), yesNo(o.ReplaceFolder))
 
 	section("Sauvegarde Job Manager")
 	reportBackup(open, in.Backup, w)
@@ -185,7 +188,18 @@ func BuildReport(open func(string) (DB, error), in ReportInput) string {
 	for _, l := range strings.Split(strings.ReplaceAll(in.Log, "\r\n", "\n"), "\n") {
 		w("%s", l)
 	}
-	return sb.String()
+	return maskHome(sb.String())
+}
+
+// maskHome : le dossier personnel (qui contient le nom d'utilisateur Windows)
+// est remplacé par %USERPROFILE% dans tout le rapport.
+func maskHome(s string) string {
+	home, err := os.UserHomeDir()
+	if err != nil || len(home) < 4 {
+		return s
+	}
+	home = strings.TrimRight(home, `\/`)
+	return regexp.MustCompile(`(?i)`+regexp.QuoteMeta(home)).ReplaceAllString(s, "%USERPROFILE%")
 }
 
 // WriteReport : "<dossier DAT> - rapport d'erreur.txt" à côté du dossier .DAT,

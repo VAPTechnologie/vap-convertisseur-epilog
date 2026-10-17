@@ -32,7 +32,7 @@ func TestVerbs(t *testing.T) {
 		}
 		if k == "csv.cols" {
 			for l := Lang(0); l < nLang; l++ {
-				if n := strings.Count(v[l], "|"); n != 10 {
+				if n := strings.Count(v[l], "|"); n != 11 {
 					t.Errorf("csv.cols [%s] %d cols", langCodes[l], n+1)
 				}
 			}

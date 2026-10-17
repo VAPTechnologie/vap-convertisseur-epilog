@@ -5,6 +5,7 @@ package main
 // sauvegarde de base Job Manager (.epidb, SQLite).
 
 import (
+	"crypto/sha256"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -67,7 +68,15 @@ type DatFile struct {
 	SpeedComp  bool
 	PowerComp  bool
 	VectorGrid bool
+	// Remarques : valeurs remplacées ou non reprises, à signaler (récapitulatif, journal)
+	Notes []string
+	Sum   [32]byte // empreinte du fichier (doublons de nom)
 }
+
+func (d *DatFile) note(k string, a ...any) { d.Notes = append(d.Notes, Tf(k, a...)) }
+
+// pct : valeur ramenée dans la plage 1-100 % de Job Manager.
+func pct(v float64) float64 { return math.Max(1, math.Min(100, v)) }
 
 // ColorEntry : une ligne de la table "Gest./Couleur" du driver
 // (à partir de l'octet 1376 : R, G, B, puissance, puis en int32 vitesse,
@@ -85,14 +94,14 @@ type ColorEntry struct {
 // 13/10/2026 en changeant une option à la fois dans chaque driver
 // (dossiers "Tests driver Mini24 / Zing / Fusion"). -1 = absent.
 type datLayout struct {
-	Name                          string
-	Size                          int
-	AutoFocus, SortOff, SortMode  int
-	Position                      int
-	ColStride, ColEng, ColCut     int
-	ColAir, ColThick, ColLaser    int
-	ColOffset                     int
-	FreqPct                       bool // fréquences déjà en % (Fusion)
+	Name                         string
+	Size                         int
+	AutoFocus, SortOff, SortMode int
+	Position                     int
+	ColStride, ColEng, ColCut    int
+	ColAir, ColThick, ColLaser   int
+	ColOffset                    int
+	FreqPct                      bool // fréquences déjà en % (Fusion)
 }
 
 var datLayouts = []datLayout{
@@ -130,6 +139,29 @@ func findLayout(size int, header string) *datLayout {
 		}
 	}
 	return nil
+}
+
+// NeedsFiber : le .DAT Fusion demande la source Fibre (réglage général ou une couleur).
+func (d DatFile) NeedsFiber() bool {
+	if d.Fiber {
+		return true
+	}
+	for _, c := range d.Colors {
+		if c.Fiber {
+			return true
+		}
+	}
+	return false
+}
+
+// laser : source des procédés généraux (0 CO2, 1 Fibre) : celle choisie, ou
+// Fibre si le .DAT Fusion la demande (les .DAT Fibre vers une machine sans
+// Fibre sont écartés avant la conversion).
+func (d DatFile) laser(o Options) int {
+	if o.Fiber || d.Fiber {
+		return 1
+	}
+	return 0
 }
 
 // Known : la mise en page du .DAT a été relevée sur le driver d'origine.
@@ -257,7 +289,7 @@ func (d DatFile) FreqPercent() float64 {
 	if !d.IsFusion {
 		return FreqToPercent(d.FreqRaw)
 	}
-	return math.Max(1, math.Min(100, float64(d.FreqRaw)))
+	return pct(float64(d.FreqRaw))
 }
 
 func le32(b []byte, off int) int { return int(int32(binary.LittleEndian.Uint32(b[off:]))) }
@@ -289,6 +321,7 @@ func ParseDat(path string) (DatFile, error) {
 		Path:     path,
 		Name:     strings.TrimSpace(base),
 		Header:   h,
+		Sum:      sha256.Sum256(b),
 		RPower:   le32(b, 256),
 		RSpeed:   le32(b, 260),
 		VPower:   le32(b, 264),
@@ -301,52 +334,56 @@ func ParseDat(path string) (DatFile, error) {
 		IsFusion: strings.Contains(strings.ToLower(h), "fusion"),
 	}
 	d.Position = -1
-	if L := findLayout(len(b), h); L != nil {
-		d.Layout = L
-		d.Raster3D = le32(b, 804) != 0
-		d.Bottom = le32(b, 852) != 0
-		if L.AutoFocus >= 0 {
-			d.AutoFocus = le32(b, L.AutoFocus) != 0
-		}
-		if L.SortOff >= 0 {
-			d.SortOff = le32(b, L.SortOff) != 0
-			d.SortOpt = le32(b, L.SortMode) != 0
-		}
-		if le32(b, 788) != 0 {
-			d.Position = le32(b, L.Position)
-		}
-		if L.Name == "fusion" {
-			d.SpeedComp = le32(b, fusSpeedComp) != 0
-			d.PowerComp = le32(b, fusPowerComp) != 0
-			d.Fiber = le32(b, fusLaser) != 0
-			d.EngFreq = le32(b, fusEngFreq)
-			d.Thickness = float64(int16(binary.LittleEndian.Uint16(b[fusThickness:]))) / 100
-			// int16 : certains anciens .DAT ont autre chose dans les 2 octets suivants
+	// Seules les structures relevées sur les pilotes d'origine sont converties :
+	// une autre taille donnerait des valeurs de remplacement présentées comme fidèles.
+	L := findLayout(len(b), h)
+	if L == nil {
+		return d, fmt.Errorf(T("err.unknownLayout"), len(b))
+	}
+	d.Layout = L
+	d.Raster3D = le32(b, 804) != 0
+	d.Bottom = le32(b, 852) != 0
+	if L.AutoFocus >= 0 {
+		d.AutoFocus = le32(b, L.AutoFocus) != 0
+	}
+	if L.SortOff >= 0 {
+		d.SortOff = le32(b, L.SortOff) != 0
+		d.SortOpt = le32(b, L.SortMode) != 0
+	}
+	if le32(b, 788) != 0 {
+		d.Position = le32(b, L.Position)
+	}
+	if L.Name == "fusion" {
+		d.SpeedComp = le32(b, fusSpeedComp) != 0
+		d.PowerComp = le32(b, fusPowerComp) != 0
+		d.Fiber = le32(b, fusLaser) != 0
+		d.EngFreq = le32(b, fusEngFreq)
+		d.Thickness = float64(int16(binary.LittleEndian.Uint16(b[fusThickness:]))) / 100
+		// int16 : certains anciens .DAT ont autre chose dans les 2 octets suivants
 		// (00 00 30 00 lu en int32 donnait 31457,28 mm).
 		d.Offset = float64(int16(binary.LittleEndian.Uint16(b[fusOffset:]))) / 100
-			d.VectorGrid = le32(b, fusVectorGrid) != 0
-		}
-		if le32(b, 792) != 0 {
-			for k := 0; k < colorMaxCount; k++ {
-				o := colorTable + k*L.ColStride
-				if o+L.ColStride > len(b) || (b[o] == 0 && b[o+1] == 0 && b[o+2] == 0 && le32(b, o+4) == 0 && le32(b, o+8) == 0) {
-					break
-				}
-				c := ColorEntry{
-					RGB:   fmt.Sprintf("%02x%02x%02x", b[o], b[o+1], b[o+2]),
-					Power: int(b[o+3]), Speed: le32(b, o+4), Freq: le32(b, o+8),
-					Engrave: le32(b, o+L.ColEng) != 0, Cut: le32(b, o+L.ColCut) != 0,
-				}
-				if L.ColAir >= 0 {
-					c.HasAir, c.Air = true, le32(b, o+L.ColAir) != 0
-				}
-				if L.ColThick >= 0 {
-					c.Thick = float64(le32(b, o+L.ColThick))
-					c.Fiber = le32(b, o+L.ColLaser) != 0
-					c.Offset = float64(le32(b, o+L.ColOffset))
-				}
-				d.Colors = append(d.Colors, c)
+		d.VectorGrid = le32(b, fusVectorGrid) != 0
+	}
+	if le32(b, 792) != 0 {
+		for k := 0; k < colorMaxCount; k++ {
+			o := colorTable + k*L.ColStride
+			if o+L.ColStride > len(b) || (b[o] == 0 && b[o+1] == 0 && b[o+2] == 0 && le32(b, o+4) == 0 && le32(b, o+8) == 0) {
+				break
 			}
+			c := ColorEntry{
+				RGB:   fmt.Sprintf("%02x%02x%02x", b[o], b[o+1], b[o+2]),
+				Power: int(b[o+3]), Speed: le32(b, o+4), Freq: le32(b, o+8),
+				Engrave: le32(b, o+L.ColEng) != 0, Cut: le32(b, o+L.ColCut) != 0,
+			}
+			if L.ColAir >= 0 {
+				c.HasAir, c.Air = true, le32(b, o+L.ColAir) != 0
+			}
+			if L.ColThick >= 0 {
+				c.Thick = float64(le32(b, o+L.ColThick))
+				c.Fiber = le32(b, o+L.ColLaser) != 0
+				c.Offset = float64(le32(b, o+L.ColOffset))
+			}
+			d.Colors = append(d.Colors, c)
 		}
 	}
 	d.Passes = PassesFromName(d.Name)
@@ -362,18 +399,69 @@ func ParseDat(path string) (DatFile, error) {
 			return d, errors.New(T("err.outOfRange"))
 		}
 	}
+	for _, c := range d.Colors {
+		if c.Power > 100 || c.Speed < 0 || c.Speed > 100 {
+			return d, fmt.Errorf(T("err.colorRange"), strings.ToUpper(c.RGB))
+		}
+	}
+	// Valeurs remplacées : conversion faite, mais signalée.
 	if d.DPI <= 0 || d.DPI > 2400 {
+		d.note("rem.dpi", d.DPI)
 		d.DPI = 600
+	}
+	if d.Mode != 1 {
+		if f := d.FreqPercent(); (!d.IsFusion && (d.FreqRaw < 10 || d.FreqRaw > 5000)) || (d.IsFusion && float64(d.FreqRaw) != f) {
+			d.note("rem.freq", d.FreqRaw, fnum(math.Round(f*10)/10))
+		}
+	}
+	if d.EngFreq > 100 {
+		d.note("rem.freq", d.EngFreq, "100")
+		d.EngFreq = 100
+	}
+	for i, c := range d.Colors {
+		f := FreqToPercent(c.Freq)
+		bad := c.Freq < 10 || c.Freq > 5000
+		if L.FreqPct {
+			f, bad = pct(float64(c.Freq)), c.Freq < 1 || c.Freq > 100
+		}
+		if bad && (c.Cut || c.Engrave) {
+			d.note("rem.colorFreq", strings.ToUpper(c.RGB), c.Freq, fnum(math.Round(f*10)/10))
+			if L.FreqPct {
+				d.Colors[i].Freq = int(f)
+			}
+		}
+	}
+	switch {
+	case d.Position == 3:
+		d.note("rem.pageCenter")
+	case d.Position < -1 || d.Position > 3:
+		d.note("rem.position", d.Position)
+	}
+	if d.Thickness < 0 {
+		d.note("rem.thickness")
+		d.Thickness = 0
+	}
+	if d.Passes > 1 {
+		d.note("rem.passes", d.Passes)
 	}
 	return d, nil
 }
 
 // ListDats : fichiers .DAT du dossier (et des sous-dossiers si demandé).
 func ListDats(dir string, recursive bool) ([]string, error) {
-	var out []string
+	out, _, err := listDats(dir, recursive)
+	return out, err
+}
+
+// listDats : idem, avec les sous-dossiers illisibles (« chemin : erreur »).
+func listDats(dir string, recursive bool) (out, unreadable []string, err error) {
 	if recursive {
 		err := filepath.WalkDir(dir, func(p string, e os.DirEntry, err error) error {
 			if err != nil {
+				if p == dir {
+					return err
+				}
+				unreadable = append(unreadable, Tf("skip.fmt", p, Tf("skip.unreadableDir", err)))
 				return nil
 			}
 			if !e.IsDir() && strings.EqualFold(filepath.Ext(p), ".dat") {
@@ -382,12 +470,12 @@ func ListDats(dir string, recursive bool) ([]string, error) {
 			return nil
 		})
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	} else {
 		ents, err := os.ReadDir(dir)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		for _, e := range ents {
 			if !e.IsDir() && strings.EqualFold(filepath.Ext(e.Name()), ".dat") {
@@ -396,7 +484,7 @@ func ListDats(dir string, recursive bool) ([]string, error) {
 		}
 	}
 	sort.Slice(out, func(i, j int) bool { return foldKey(out[i]) < foldKey(out[j]) })
-	return out, nil
+	return out, unreadable, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -621,7 +709,6 @@ type Options struct {
 	Recursive     bool
 	Machine       Machine
 	FolderName    string
-	AirAssistCut  bool
 	VectorSort    int // 0 aucun, 1 intérieur vers extérieur, 2 optimisé, 3 comme le .DAT
 	OnTop         bool
 	Fiber         bool
@@ -634,21 +721,50 @@ type Result struct {
 	FolderID  int64
 }
 
+// Noted : nombre de réglages convertis avec au moins une remarque.
+func (r Result) Noted() int {
+	n := 0
+	for _, d := range r.Converted {
+		if len(d.Notes) > 0 {
+			n++
+		}
+	}
+	return n
+}
+
 var ErrFolderExists = errors.New("folder exists")
 
-func FindJobFolder(db DB, name string) (int64, error) {
-	rows, err := db.Query(`SELECT ID FROM MaterialFolders WHERE ForJobSettings=1 AND Name=?`, name)
+// CheckLaser : la source choisie (CO2 ou Fibre) doit exister sur la machine.
+func CheckLaser(o Options) error {
+	if o.Fiber && !o.Machine.HasFiber() {
+		return fmt.Errorf(T("err.noFiber"), o.Machine.Name)
+	}
+	if !o.Fiber && !o.Machine.HasCO2() {
+		return fmt.Errorf(T("err.noCO2"), o.Machine.Name)
+	}
+	return nil
+}
+
+// FindJobFolder : dossier « Paramètres du travail » de ce nom pour cette machine
+// (0 si absent). Plusieurs dossiers identiques : erreur, rien n'est remplacé.
+func FindJobFolder(db DB, name string, machineID int64) (int64, error) {
+	rows, err := db.Query(`SELECT ID FROM MaterialFolders WHERE ForJobSettings=1 AND Name=? AND MachineID=?`, name, machineID)
 	if err != nil || len(rows) == 0 {
 		return 0, err
+	}
+	if len(rows) > 1 {
+		return 0, fmt.Errorf(T("err.folderMultiple"), len(rows), name)
 	}
 	return toInt(rows[0][0]), nil
 }
 
-func subfolderIDs(db DB) map[int]int64 {
-	ids := map[int]int64{SubMetal: 1, SubBois: 2, SubPlastique: 3}
+// subfolderIDs : sous-dossiers Métal / Bois / Plastique trouvés par leur nom
+// (toutes les langues de l'interface) ; les absents ne sont pas dans la table.
+func subfolderIDs(db DB) (map[int]int64, error) {
+	ids := map[int]int64{}
 	rows, err := db.Query(`SELECT ID, Name FROM MaterialSubfolders`)
 	if err != nil {
-		return ids
+		return nil, err
 	}
 	found := map[string]int64{}
 	for _, r := range rows {
@@ -663,29 +779,32 @@ func subfolderIDs(db DB) map[int]int64 {
 			}
 		}
 	}
-	return ids
+	return ids, nil
 }
 
-func ensureSubfolders(db DB) map[int]int64 {
-	ids := subfolderIDs(db)
-	// crée les sous-dossiers manquants (base neuve)
+// ensureSubfolders : crée les sous-dossiers absents, sans supposer le sens
+// d'un identifiant existant.
+func ensureSubfolders(db DB) (map[int]int64, error) {
+	ids, err := subfolderIDs(db)
+	if err != nil {
+		return nil, err
+	}
 	names := map[int]string{SubMetal: T("sub.metal"), SubBois: T("sub.wood"), SubPlastique: T("sub.plastic")}
-	rows, _ := db.Query(`SELECT ID FROM MaterialSubfolders`)
-	have := map[int64]bool{}
-	for _, r := range rows {
-		have[toInt(r[0])] = true
-	}
-	for k, id := range ids {
-		if !have[id] {
-			if r, err := db.Query(`SELECT IFNULL(MAX(ID),0)+1 FROM MaterialSubfolders`); err == nil && len(r) > 0 {
-				nid := toInt(r[0][0])
-				if db.Exec(`INSERT INTO MaterialSubfolders (ID, SortID, Name) VALUES (?,?,?)`, nid, nid, names[k]) == nil {
-					ids[k] = nid
-				}
-			}
+	for _, k := range []int{SubMetal, SubBois, SubPlastique} {
+		if _, ok := ids[k]; ok {
+			continue
 		}
+		r, err := db.Query(`SELECT IFNULL(MAX(ID),0)+1 FROM MaterialSubfolders`)
+		if err != nil {
+			return nil, err
+		}
+		nid := toInt(r[0][0])
+		if err := db.Exec(`INSERT INTO MaterialSubfolders (ID, SortID, Name) VALUES (?,?,?)`, nid, nid, names[k]); err != nil {
+			return nil, fmt.Errorf(T("err.createSub"), names[k], err)
+		}
+		ids[k] = nid
 	}
-	return ids
+	return ids, nil
 }
 
 // Tables et colonnes de la sauvegarde utilisées par la conversion.
@@ -745,15 +864,22 @@ func Convert(db DB, o Options, logf func(string), progress func(done, total int)
 	if err := CheckSchema(db); err != nil {
 		return res, err
 	}
-	paths, err := ListDats(o.DatDir, o.Recursive)
+	if err := CheckLaser(o); err != nil {
+		return res, err
+	}
+	paths, unreadable, err := listDats(o.DatDir, o.Recursive)
 	if err != nil {
 		return res, fmt.Errorf(T("err.readDir"), err)
+	}
+	for _, u := range unreadable {
+		res.Skipped = append(res.Skipped, u)
+		logf("  ⚠ " + u)
 	}
 	if len(paths) == 0 {
 		return res, errors.New(T("err.noDat"))
 	}
 	var dats []DatFile
-	seen := map[string]bool{}
+	seen := map[string][32]byte{} // nom (sans casse ni accents) -> contenu
 	for _, p := range paths {
 		d, err := ParseDat(p)
 		if err != nil {
@@ -767,12 +893,27 @@ func Convert(db DB, o Options, logf func(string), progress func(done, total int)
 			logf(Tf("log.skipped", d.Name, T("skip.testGridLog")))
 			continue
 		}
-		key := foldKey(d.Name)
-		if seen[key] {
-			res.Skipped = append(res.Skipped, Tf("skip.fmt", d.Name, T("skip.dup")))
+		if d.NeedsFiber() && !o.Machine.HasFiber() {
+			res.Skipped = append(res.Skipped, Tf("skip.fmt", d.Name, T("skip.needsFiber")))
+			logf(Tf("log.skipped", d.Name, T("skip.needsFiber")))
 			continue
 		}
-		seen[key] = true
+		key := foldKey(d.Name)
+		if sum, ok := seen[key]; ok {
+			if sum == d.Sum {
+				res.Skipped = append(res.Skipped, Tf("skip.fmt", d.Name, T("skip.dup")))
+				continue
+			}
+			// même nom, réglages différents : les deux sont gardés
+			orig := d.Name
+			for n := 2; ok; n++ {
+				d.Name = fmt.Sprintf("%s (%d)", orig, n)
+				_, ok = seen[foldKey(d.Name)]
+			}
+			d.note("rem.renamed", orig)
+			key = foldKey(d.Name)
+		}
+		seen[key] = d.Sum
 		dats = append(dats, d)
 	}
 	if len(dats) == 0 {
@@ -791,7 +932,7 @@ func Convert(db DB, o Options, logf func(string), progress func(done, total int)
 	}()
 
 	// Dossier "Paramètres du travail"
-	fid, err := FindJobFolder(db, o.FolderName)
+	fid, err := FindJobFolder(db, o.FolderName, o.Machine.ID)
 	if err != nil {
 		return res, err
 	}
@@ -804,7 +945,10 @@ func Convert(db DB, o Options, logf func(string), progress func(done, total int)
 		}
 		logf(Tf("log.replaced", o.FolderName))
 	}
-	subs := ensureSubfolders(db)
+	subs, err := ensureSubfolders(db)
+	if err != nil {
+		return res, err
+	}
 	subList := fmt.Sprintf(`<list><element val="%d"/><element val="%d"/><element val="%d"/></list>`, subs[SubBois], subs[SubPlastique], subs[SubMetal])
 
 	sortID := int64(0)
@@ -853,14 +997,9 @@ func Convert(db DB, o Options, logf func(string), progress func(done, total int)
 		sid = toInt(r2[0][0])
 	}
 
-	laser := 0
-	if o.Fiber {
-		laser = 1
-	}
-	air := 0
-	if o.AirAssistCut {
-		air = 1
-	}
+	// Assistance d'air sur Marche pour toutes les découpes (décision VAP, sécurité) :
+	// imposée ici, pas seulement dans l'interface.
+	air := 1
 	H := fnum(o.Machine.H)
 	W := fnum(o.Machine.W)
 	now := time.Now().Unix()
@@ -886,11 +1025,7 @@ func Convert(db DB, o Options, logf func(string), progress func(done, total int)
 		th := ThicknessMils(d.Name)
 		vf := fnum(math.Round(d.FreqPercent()*1e4) / 1e4)
 		vsort, dith, ord := d.JMSort(o.VectorSort), d.JMDither(), b2i(d.Bottom)
-		// Fusion : source Fibre seulement si la machine de destination en a une.
-		dl := laser
-		if d.Fiber && o.Machine.HasFiber() {
-			dl = 1
-		}
+		dl := d.laser(o)
 		grav := proc{name: en, ptype: 1, thick: 0, rp: d.RPower, rs: d.RSpeed, dpi: d.DPI, vp: 50, vs: 50, vf: "50", air: 0, sort: vsort, pulse: "-1", laser: dl, dither: dith, order: ord}
 		cut := proc{name: en, ptype: 2, thick: th, rp: 100, rs: 15, dpi: d.DPI, vp: d.VPower, vs: d.VSpeed, vf: vf, air: air, sort: vsort, pulse: "-1", laser: dl, dither: dith, order: ord}
 		if dl == 1 && d.EngFreq > 0 {
@@ -915,7 +1050,7 @@ func Convert(db DB, o Options, logf func(string), progress func(done, total int)
 		for _, c := range d.Colors {
 			cn := en + " #" + strings.ToUpper(c.RGB)
 			cl := dl
-			if c.Fiber && o.Machine.HasFiber() {
+			if c.Fiber {
 				cl = 1
 			}
 			setFusion := func(p *proc) {
@@ -932,12 +1067,9 @@ func Convert(db DB, o Options, logf func(string), progress func(done, total int)
 				p.name, p.vp, p.vs, p.passes = cn, c.Power, c.Speed, 1
 				cf := FreqToPercent(c.Freq)
 				if d.Layout.FreqPct {
-					cf = math.Max(1, math.Min(100, float64(c.Freq)))
+					cf = pct(float64(c.Freq))
 				}
 				p.vf = fnum(math.Round(cf*1e4) / 1e4)
-				if c.HasAir {
-					p.air = max(air, b2i(c.Air))
-				}
 				p.query = colorQuery("lte", c.RGB)
 				setFusion(&p)
 				cps += p.xml()
@@ -948,7 +1080,7 @@ func Convert(db DB, o Options, logf func(string), progress func(done, total int)
 				p.query = colorQuery("gt", c.RGB)
 				setFusion(&p)
 				if cl == 1 && d.Layout.FreqPct {
-					p.rfreq = strconv.Itoa(c.Freq)
+					p.rfreq = fnum(pct(float64(c.Freq)))
 				}
 				cps += p.xml()
 			}
@@ -993,9 +1125,15 @@ func Convert(db DB, o Options, logf func(string), progress func(done, total int)
 			return res, fmt.Errorf(T("err.addSetting"), d.Name, err)
 		}
 		res.Converted = append(res.Converted, d)
+		for _, n := range d.Notes {
+			logf(Tf("log.note", d.Name, n))
+		}
 		if progress != nil {
 			progress(i+1, len(rows))
 		}
+	}
+	if n := res.Noted(); n > 0 {
+		logf(Tf("log.warnings", n))
 	}
 	for _, t := range []string{"Settings", "MaterialFolders", "MaterialSubfolders"} {
 		db.Exec(`UPDATE sqlite_sequence SET seq=(SELECT MAX(ID) FROM `+t+`) WHERE name=?`, t)
@@ -1035,12 +1173,22 @@ func WriteRecap(path string, o Options, res Result) error {
 		if d.Stamp {
 			rem = append(rem, T("rem.stamp"))
 		}
-		if d.Passes > 1 {
-			rem = append(rem, Tf("rem.passes", d.Passes))
-		}
 		if len(d.Colors) > 0 {
 			rem = append(rem, Tf("rem.colors", len(d.Colors)))
 		}
+		srcName := func(l int) string { return T([]string{"laser.co2", "laser.fiber"}[l]) }
+		for _, c := range d.Colors {
+			if !(c.Cut && d.Mode != 1 || c.Engrave && d.Mode != 0) {
+				continue
+			}
+			f := FreqToPercent(c.Freq)
+			if d.Layout.FreqPct {
+				f = pct(float64(c.Freq))
+			}
+			rem = append(rem, Tf("rem.colorDetail", strings.ToUpper(c.RGB), c.Power, c.Speed,
+				strings.ReplaceAll(strconv.FormatFloat(f, 'f', 1, 64), ".", dec), srcName(max(d.laser(o), b2i(c.Fiber)))))
+		}
+		rem = append(rem, d.Notes...)
 		gs, gp, cs, cp, cf := "", "", "", "", ""
 		if d.Mode != 0 {
 			gs, gp = strconv.Itoa(d.RSpeed), strconv.Itoa(d.RPower)
@@ -1049,18 +1197,26 @@ func WriteRecap(path string, o Options, res Result) error {
 			cs, cp = strconv.Itoa(d.VSpeed), strconv.Itoa(d.VPower)
 			cf = strings.ReplaceAll(strconv.FormatFloat(d.FreqPercent(), 'f', 1, 64), ".", dec)
 		}
+		// même épaisseur que la conversion : celle de l'autofocus Fusion, sinon le nom
 		th := ""
-		if t := ThicknessMils(d.Name); t > 0 && d.Mode != 1 {
+		t := ThicknessMils(d.Name)
+		if d.Mode == 1 {
+			t = 0
+		}
+		if d.Thickness > 0 {
+			t = mmToMils(d.Thickness)
+		}
+		if t > 0 {
 			th = strings.ReplaceAll(strconv.FormatFloat(t*25.4/1000, 'f', 2, 64), ".", dec)
 		}
-		f := []string{subName[Classify(d.Name)], d.Name, d.ModeLabel(), strconv.Itoa(d.DPI), gs, gp, cs, cp, cf, th, strings.Join(rem, " / ")}
+		f := []string{subName[Classify(d.Name)], d.Name, d.ModeLabel(), strconv.Itoa(d.DPI), gs, gp, cs, cp, cf, th, srcName(d.laser(o)), strings.Join(rem, " / ")}
 		for i := range f {
 			f[i] = esc(f[i])
 		}
 		sb.WriteString(strings.Join(f, sep) + "\r\n")
 	}
 	for _, s := range res.Skipped {
-		f := []string{"", esc(s), T("csv.skipped"), "", "", "", "", "", "", "", ""}
+		f := []string{"", esc(s), T("csv.skipped"), "", "", "", "", "", "", "", "", ""}
 		sb.WriteString(strings.Join(f, sep) + "\r\n")
 	}
 	return os.WriteFile(path, []byte(sb.String()), 0o644)

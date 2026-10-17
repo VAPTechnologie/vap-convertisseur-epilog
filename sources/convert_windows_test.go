@@ -41,7 +41,7 @@ func TestConvertDossier(t *testing.T) {
 	if v := os.Getenv("VAP_SORT"); v != "" { // 0 aucun, 1 intérieur/extérieur, 2 optimisé, 3 comme le .DAT
 		sortOpt = int(v[0] - '0')
 	}
-	o := Options{DatDir: dat, Machine: m, FolderName: name, AirAssistCut: true, VectorSort: sortOpt, OnTop: true, ReplaceFolder: true}
+	o := Options{DatDir: dat, Machine: m, FolderName: name, VectorSort: sortOpt, OnTop: true, ReplaceFolder: true}
 	out, res, err := Run(openRW, bk, o, func(s string) { t.Log(s) }, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -67,7 +67,7 @@ func TestRapport(t *testing.T) {
 	if err != nil || len(ms) == 0 {
 		t.Fatal("aucune machine", err)
 	}
-	o := Options{DatDir: dat, Machine: ms[0], FolderName: ms[0].Name, AirAssistCut: true, OnTop: true}
+	o := Options{DatDir: dat, Machine: ms[0], FolderName: ms[0].Name, OnTop: true}
 	p, err := WriteReport(openRO, ReportInput{Version: appVersion(), System: reportSystem(), Backup: bk,
 		Options: o, Log: "ligne 1\r\nligne 2", Err: errors.New("erreur simulée")})
 	if err != nil {

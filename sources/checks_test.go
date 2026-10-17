@@ -94,3 +94,13 @@ func TestSourceDirFor(t *testing.T) {
 		}
 	}
 }
+
+func TestMaskHome(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "Jean Dupont")
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	got := maskHome("Dossier .DAT : " + strings.ToUpper(home) + string(filepath.Separator) + "Réglages")
+	if strings.Contains(strings.ToLower(got), "jean dupont") || !strings.Contains(got, "%USERPROFILE%") {
+		t.Errorf("chemin non masqué : %s", got)
+	}
+}

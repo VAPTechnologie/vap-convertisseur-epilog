@@ -129,7 +129,7 @@ func main() {
 			m = x
 		}
 	}
-	o := Options{DatDir: *dat, Machine: m, FolderName: m.Name, AirAssistCut: true, VectorSort: 1, OnTop: true}
+	o := Options{DatDir: *dat, Machine: m, FolderName: m.Name, VectorSort: 1, OnTop: true}
 	out, res, err := Run(openPyDB, *bk, o, func(s string) { fmt.Println(s) }, nil)
 	fmt.Println("OUT", out, len(res.Converted), len(res.Skipped), err)
 }
