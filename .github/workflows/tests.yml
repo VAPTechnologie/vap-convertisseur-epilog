@@ -30,6 +30,7 @@ jobs:
           go vet ./... 2>&1 | tee vet.txt || true
           if grep -v -e '^#' -e 'possible misuse of unsafe.Pointer' vet.txt; then exit 1; fi
 
+      # Conversions complètes sur des .DAT et une base synthétiques (conversion_test.go) : toujours lancées.
       # Sans VAP_DAT, VAP_BACKUP, VAP_REF ni VAP_SAMPLE, les tests sur les fichiers réels sont ignorés.
       - name: go test
         run: go test -v ./...
