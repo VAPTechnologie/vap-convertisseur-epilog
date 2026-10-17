@@ -683,6 +683,21 @@ var tr = map[string][nLang]string{
 		"Vorhandener Ordner „%s“ geleert und ersetzt.", "Cartella esistente «%s» svuotata e sostituita.", "Pasta existente \"%s\" esvaziada e substituída.",
 		"Bestaande map '%s' geleegd en vervangen.", "已清空并替换现有文件夹“%s”。", "既存のフォルダー「%s」を空にして置き換えました。",
 	},
+	"err.createSub": {
+		"création du sous-dossier « %s » : %w", "creating the subfolder \"%s\": %w", "creación de la subcarpeta «%s»: %w", "Anlegen des Unterordners „%s“: %w",
+		"creazione della sottocartella «%s»: %w", "criação da subpasta \"%s\": %w", "submap '%s' aanmaken: %w", "创建子文件夹“%s”：%w", "サブフォルダー「%s」の作成：%w",
+	},
+	"err.folderMultiple": {
+		"%d dossiers « %s » existent déjà pour cette machine dans Job Manager : renommez-les ou choisissez un autre nom",
+		"%d folders \"%s\" already exist for this machine in Job Manager: rename them or choose another name",
+		"ya existen %d carpetas «%s» para esta máquina en Job Manager: cámbieles el nombre o elija otro nombre",
+		"in Job Manager gibt es für diese Maschine bereits %d Ordner „%s“: benennen Sie sie um oder wählen Sie einen anderen Namen",
+		"in Job Manager esistono già %d cartelle «%s» per questa macchina: rinominarle o scegliere un altro nome",
+		"já existem %d pastas \"%s\" para esta máquina no Job Manager: renomeie-as ou escolha outro nome",
+		"er bestaan al %d mappen '%s' voor deze machine in Job Manager: hernoem ze of kies een andere naam",
+		"Job Manager 中此机器已有 %d 个“%s”文件夹：请重命名或选择其他名称",
+		"Job Manager にこのマシンの「%[2]s」フォルダーが既に %[1]d 個あります：名前を変更するか別の名前を選んでください",
+	},
 	"err.createFolder": {
 		"création du dossier : %w", "creating the folder: %w", "creación de la carpeta: %w", "Anlegen des Ordners: %w",
 		"creazione della cartella: %w", "criação da pasta: %w", "map aanmaken: %w", "创建文件夹：%w", "フォルダーの作成：%w",

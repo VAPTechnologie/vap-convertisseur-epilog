@@ -736,19 +736,26 @@ func CheckLaser(o Options) error {
 	return nil
 }
 
-func FindJobFolder(db DB, name string) (int64, error) {
-	rows, err := db.Query(`SELECT ID FROM MaterialFolders WHERE ForJobSettings=1 AND Name=?`, name)
+// FindJobFolder : dossier « Paramètres du travail » de ce nom pour cette machine
+// (0 si absent). Plusieurs dossiers identiques : erreur, rien n'est remplacé.
+func FindJobFolder(db DB, name string, machineID int64) (int64, error) {
+	rows, err := db.Query(`SELECT ID FROM MaterialFolders WHERE ForJobSettings=1 AND Name=? AND MachineID=?`, name, machineID)
 	if err != nil || len(rows) == 0 {
 		return 0, err
+	}
+	if len(rows) > 1 {
+		return 0, fmt.Errorf(T("err.folderMultiple"), len(rows), name)
 	}
 	return toInt(rows[0][0]), nil
 }
 
-func subfolderIDs(db DB) map[int]int64 {
-	ids := map[int]int64{SubMetal: 1, SubBois: 2, SubPlastique: 3}
+// subfolderIDs : sous-dossiers Métal / Bois / Plastique trouvés par leur nom
+// (toutes les langues de l'interface) ; les absents ne sont pas dans la table.
+func subfolderIDs(db DB) (map[int]int64, error) {
+	ids := map[int]int64{}
 	rows, err := db.Query(`SELECT ID, Name FROM MaterialSubfolders`)
 	if err != nil {
-		return ids
+		return nil, err
 	}
 	found := map[string]int64{}
 	for _, r := range rows {
@@ -763,29 +770,32 @@ func subfolderIDs(db DB) map[int]int64 {
 			}
 		}
 	}
-	return ids
+	return ids, nil
 }
 
-func ensureSubfolders(db DB) map[int]int64 {
-	ids := subfolderIDs(db)
-	// crée les sous-dossiers manquants (base neuve)
+// ensureSubfolders : crée les sous-dossiers absents, sans supposer le sens
+// d'un identifiant existant.
+func ensureSubfolders(db DB) (map[int]int64, error) {
+	ids, err := subfolderIDs(db)
+	if err != nil {
+		return nil, err
+	}
 	names := map[int]string{SubMetal: T("sub.metal"), SubBois: T("sub.wood"), SubPlastique: T("sub.plastic")}
-	rows, _ := db.Query(`SELECT ID FROM MaterialSubfolders`)
-	have := map[int64]bool{}
-	for _, r := range rows {
-		have[toInt(r[0])] = true
-	}
-	for k, id := range ids {
-		if !have[id] {
-			if r, err := db.Query(`SELECT IFNULL(MAX(ID),0)+1 FROM MaterialSubfolders`); err == nil && len(r) > 0 {
-				nid := toInt(r[0][0])
-				if db.Exec(`INSERT INTO MaterialSubfolders (ID, SortID, Name) VALUES (?,?,?)`, nid, nid, names[k]) == nil {
-					ids[k] = nid
-				}
-			}
+	for _, k := range []int{SubMetal, SubBois, SubPlastique} {
+		if _, ok := ids[k]; ok {
+			continue
 		}
+		r, err := db.Query(`SELECT IFNULL(MAX(ID),0)+1 FROM MaterialSubfolders`)
+		if err != nil {
+			return nil, err
+		}
+		nid := toInt(r[0][0])
+		if err := db.Exec(`INSERT INTO MaterialSubfolders (ID, SortID, Name) VALUES (?,?,?)`, nid, nid, names[k]); err != nil {
+			return nil, fmt.Errorf(T("err.createSub"), names[k], err)
+		}
+		ids[k] = nid
 	}
-	return ids
+	return ids, nil
 }
 
 // Tables et colonnes de la sauvegarde utilisées par la conversion.
@@ -913,7 +923,7 @@ func Convert(db DB, o Options, logf func(string), progress func(done, total int)
 	}()
 
 	// Dossier "Paramètres du travail"
-	fid, err := FindJobFolder(db, o.FolderName)
+	fid, err := FindJobFolder(db, o.FolderName, o.Machine.ID)
 	if err != nil {
 		return res, err
 	}
@@ -926,7 +936,10 @@ func Convert(db DB, o Options, logf func(string), progress func(done, total int)
 		}
 		logf(Tf("log.replaced", o.FolderName))
 	}
-	subs := ensureSubfolders(db)
+	subs, err := ensureSubfolders(db)
+	if err != nil {
+		return res, err
+	}
 	subList := fmt.Sprintf(`<list><element val="%d"/><element val="%d"/><element val="%d"/></list>`, subs[SubBois], subs[SubPlastique], subs[SubMetal])
 
 	sortID := int64(0)

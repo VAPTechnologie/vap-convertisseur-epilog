@@ -349,7 +349,7 @@ func TestVerifReglages(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			fid, _ := FindJobFolder(db, folder)
+			fid, _ := FindJobFolder(db, folder, m.ID)
 			rows, err := db.Query(`SELECT Name, GlobalSettings, ProcessSettings FROM Settings WHERE FolderID=?`, fid)
 			if err != nil {
 				t.Fatal(err)

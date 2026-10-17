@@ -323,3 +323,62 @@ func TestConversionRemplacement(t *testing.T) {
 		t.Errorf("après remplacement : %v réglages, %v dossiers (attendu 2 / 1)", r[0][0], f[0][0])
 	}
 }
+
+// execIn : requête sur la sauvegarde de test avant conversion.
+func execIn(t *testing.T, base, q string, args ...any) {
+	t.Helper()
+	db, err := openTestDB(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if err := db.Exec(q, args...); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestConversionDossiers(t *testing.T) {
+	mini := fakeDat(2924, "Epilog Engraver Win32 Mini")
+
+	t.Run("même nom sur une autre machine", func(t *testing.T) {
+		c := newConv(t)
+		c.add("Bois 3 mm", mini)
+		execIn(t, c.base, `INSERT INTO MaterialFolders (ID, SortID, Name, Subfolders, MachineID, ForJobSettings) VALUES (50, 1, ?, '', ?, 1)`, mCO2.Name, mDual.ID)
+		execIn(t, c.base, `INSERT INTO Settings (ID, Name, FolderID) VALUES (70, 'Réglage Fusion', 50)`)
+		res, got, err := c.run(mCO2, false)
+		if err != nil || len(res.Converted) != 1 || len(got) != 1 {
+			t.Fatalf("%v %d %v", err, len(res.Converted), got)
+		}
+		if res.FolderID == 50 {
+			t.Error("le dossier de l'autre machine a été repris")
+		}
+	})
+	t.Run("plusieurs dossiers identiques", func(t *testing.T) {
+		c := newConv(t)
+		c.add("Bois 3 mm", mini)
+		for _, id := range []int{50, 51} {
+			execIn(t, c.base, `INSERT INTO MaterialFolders (ID, SortID, Name, Subfolders, MachineID, ForJobSettings) VALUES (?, 1, ?, '', ?, 1)`, id, mCO2.Name, mCO2.ID)
+		}
+		if _, _, err := c.run(mCO2, false); err == nil || !strings.Contains(err.Error(), "2 dossiers") {
+			t.Errorf("erreur attendue : %v", err)
+		}
+	})
+	t.Run("identifiants 1 2 3 déjà pris", func(t *testing.T) {
+		c := newConv(t)
+		c.add("Inox brossé", mini)
+		for i, n := range []string{"Verre", "Pierre", "Cuir"} {
+			execIn(t, c.base, `INSERT INTO MaterialSubfolders (ID, SortID, Name) VALUES (?,?,?)`, i+1, i+1, n)
+		}
+		_, _, err := c.run(mCO2, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		outs, _ := filepath.Glob(filepath.Join(filepath.Dir(c.dats), "*", "*.epidb"))
+		db, _ := openTestDB(outs[0])
+		defer db.Close()
+		r, _ := db.Query(`SELECT f.Name FROM Settings s JOIN MaterialSubfolders f ON f.ID=s.SubFolderID WHERE s.Name='Inox brossé'`)
+		if len(r) != 1 || toStr(r[0][0]) != "Métal" {
+			t.Errorf("sous-dossier de « Inox brossé » : %v", r)
+		}
+	})
+}

@@ -923,7 +923,7 @@ func (a *app) convert() {
 	}
 	// dossier déjà présent ?
 	if db, err := openRO(bk); err == nil {
-		fid, _ := FindJobFolder(db, folder)
+		fid, _ := FindJobFolder(db, folder, o.Machine.ID)
 		db.Close()
 		if fid != 0 {
 			if msgBox(a.hwnd, Tf("ask.replace", folder),

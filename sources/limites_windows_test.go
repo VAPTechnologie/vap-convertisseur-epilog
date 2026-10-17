@@ -104,7 +104,7 @@ func (e limEnv) run(t *testing.T, dat string) (string, Result, error) {
 	return out, res, err
 }
 
-func settingNames(t *testing.T, out string) map[string]string {
+func settingNames(t *testing.T, out string, mid int64) map[string]string {
 	m, _ := filepath.Glob(filepath.Join(out, "*.epidb"))
 	if len(m) != 1 {
 		t.Fatalf("base convertie introuvable dans %s", out)
@@ -114,7 +114,7 @@ func settingNames(t *testing.T, out string) map[string]string {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	fid, _ := FindJobFolder(db, "TEST limites")
+	fid, _ := FindJobFolder(db, "TEST limites", mid)
 	rows, err := db.Query(`SELECT Name, ProcessSettings FROM Settings WHERE FolderID=?`, fid)
 	if err != nil {
 		t.Fatal(err)
@@ -184,7 +184,7 @@ func TestLimites(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		got := settingNames(t, out)
+		got := settingNames(t, out, e.mach.ID)
 		for _, n := range names {
 			ps, ok := got[n]
 			if !ok {
