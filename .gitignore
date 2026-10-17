@@ -1,3 +1,5 @@
 # Programme compilé et ressources générées par go-winres
 *.exe
 *.syso
+# Programme Linux compilé pour les tests
+sources/vapconv
