@@ -66,8 +66,23 @@ func (d refDat) header() string {
 }
 
 // valid : le .DAT doit être converti (sinon il doit être ignoré).
-func (d refDat) valid() bool {
+func (d refDat) valid(m Machine) bool {
 	if len(d.b) < 900 || !strings.HasPrefix(d.header(), "Epilog") || string(d.b[220:224]) != "MDPE" {
+		return false
+	}
+	// seules les structures relevées sur les pilotes sont converties
+	h, want := strings.ToLower(d.header()), 2924
+	switch {
+	case strings.Contains(h, "zing"):
+		want = 2992
+	case strings.Contains(h, "fusion"):
+		want = 3156
+	}
+	if len(d.b) != want {
+		return false
+	}
+	// réglage Fibre (général ou d'une couleur) vers une machine sans Fibre : refusé
+	if d.needsFiber() && !m.HasFiber() {
 		return false
 	}
 	if m := d.i(272); m < 0 || m > 2 {
@@ -80,6 +95,27 @@ func (d refDat) valid() bool {
 	}
 	low := foldKey(d.name)
 	return !strings.HasPrefix(low, "param1") && !strings.HasPrefix(low, "param2")
+}
+
+func (d refDat) needsFiber() bool {
+	if !d.fusion() {
+		return false
+	}
+	if d.i(3096) != 0 {
+		return true
+	}
+	if d.i(792) != 0 {
+		for k := 0; k < 16; k++ {
+			o := 1376 + k*40
+			if d.b[o] == 0 && d.b[o+1] == 0 && d.b[o+2] == 0 && d.i(o+4) == 0 && d.i(o+8) == 0 {
+				break
+			}
+			if d.i(o+28) != 0 {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func refThickMM(name string) float64 {
@@ -104,7 +140,7 @@ func refPasses(name string) int {
 }
 
 // check : liste des écarts entre le .DAT et le réglage Job Manager.
-func (d refDat) check(global, procs string, fiberMachine bool) []string {
+func (d refDat) check(global, procs string, m Machine) []string {
 	var errs []string
 	expect := func(what string, got string, want any) {
 		if got != fmt.Sprint(want) {
@@ -137,7 +173,8 @@ func (d refDat) check(global, procs string, fiberMachine bool) []string {
 		}
 	}
 	laser := 0
-	if fus && d.i(3096) != 0 && fiberMachine {
+	// machine uniquement Fibre : source Fibre imposée ; sinon celle du .DAT Fusion
+	if !m.HasCO2() || fus && d.i(3096) != 0 {
 		laser = 1
 	}
 	thick := refThickMM(d.name)
@@ -307,7 +344,7 @@ func TestVerifReglages(t *testing.T) {
 			}
 			defer db.Close()
 			folder := "TEST " + filepath.Base(dir)
-			o := Options{DatDir: dir, Machine: m, FolderName: folder, AirAssistCut: true, VectorSort: SortFromDat, OnTop: true, ReplaceFolder: true}
+			o := Options{DatDir: dir, Machine: m, FolderName: folder, AirAssistCut: true, VectorSort: SortFromDat, OnTop: true, ReplaceFolder: true, Fiber: !m.HasCO2()}
 			res, err := Convert(db, o, func(string) {}, nil)
 			if err != nil {
 				t.Fatal(err)
@@ -329,7 +366,7 @@ func TestVerifReglages(t *testing.T) {
 				k := foldKey(d.name)
 				s, present := got[k]
 				switch {
-				case !d.valid():
+				case !d.valid(m):
 					if present && !seen[k] {
 						t.Errorf("%s : aurait dû être ignoré", d.name)
 						nBad++
@@ -343,7 +380,7 @@ func TestVerifReglages(t *testing.T) {
 					continue
 				}
 				seen[k] = true
-				if errs := d.check(s[0], s[1], m.HasFiber()); len(errs) > 0 {
+				if errs := d.check(s[0], s[1], m); len(errs) > 0 {
 					t.Errorf("%s : %s", d.name, strings.Join(errs, " ; "))
 					nBad++
 				} else {

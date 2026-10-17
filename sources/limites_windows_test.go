@@ -168,9 +168,9 @@ func TestLimites(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		// "Coupe en deux" garde une taille > 900 octets : lu sans le détail du pilote
-		if len(res.Converted) != 3 || len(res.Skipped) != 7 {
-			t.Errorf("%d convertis / %d ignorés, attendu 3 / 7 : %v", len(res.Converted), len(res.Skipped), res.Skipped)
+		// "Coupe en deux" garde une taille > 900 octets mais n'a plus une structure connue : refusé
+		if len(res.Converted) != 2 || len(res.Skipped) != 8 {
+			t.Errorf("%d convertis / %d ignorés, attendu 2 / 8 : %v", len(res.Converted), len(res.Skipped), res.Skipped)
 		}
 	})
 

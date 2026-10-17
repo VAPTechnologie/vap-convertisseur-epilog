@@ -85,14 +85,14 @@ type ColorEntry struct {
 // 13/10/2026 en changeant une option à la fois dans chaque driver
 // (dossiers "Tests driver Mini24 / Zing / Fusion"). -1 = absent.
 type datLayout struct {
-	Name                          string
-	Size                          int
-	AutoFocus, SortOff, SortMode  int
-	Position                      int
-	ColStride, ColEng, ColCut     int
-	ColAir, ColThick, ColLaser    int
-	ColOffset                     int
-	FreqPct                       bool // fréquences déjà en % (Fusion)
+	Name                         string
+	Size                         int
+	AutoFocus, SortOff, SortMode int
+	Position                     int
+	ColStride, ColEng, ColCut    int
+	ColAir, ColThick, ColLaser   int
+	ColOffset                    int
+	FreqPct                      bool // fréquences déjà en % (Fusion)
 }
 
 var datLayouts = []datLayout{
@@ -130,6 +130,19 @@ func findLayout(size int, header string) *datLayout {
 		}
 	}
 	return nil
+}
+
+// NeedsFiber : le .DAT Fusion demande la source Fibre (réglage général ou une couleur).
+func (d DatFile) NeedsFiber() bool {
+	if d.Fiber {
+		return true
+	}
+	for _, c := range d.Colors {
+		if c.Fiber {
+			return true
+		}
+	}
+	return false
 }
 
 // Known : la mise en page du .DAT a été relevée sur le driver d'origine.
@@ -301,52 +314,56 @@ func ParseDat(path string) (DatFile, error) {
 		IsFusion: strings.Contains(strings.ToLower(h), "fusion"),
 	}
 	d.Position = -1
-	if L := findLayout(len(b), h); L != nil {
-		d.Layout = L
-		d.Raster3D = le32(b, 804) != 0
-		d.Bottom = le32(b, 852) != 0
-		if L.AutoFocus >= 0 {
-			d.AutoFocus = le32(b, L.AutoFocus) != 0
-		}
-		if L.SortOff >= 0 {
-			d.SortOff = le32(b, L.SortOff) != 0
-			d.SortOpt = le32(b, L.SortMode) != 0
-		}
-		if le32(b, 788) != 0 {
-			d.Position = le32(b, L.Position)
-		}
-		if L.Name == "fusion" {
-			d.SpeedComp = le32(b, fusSpeedComp) != 0
-			d.PowerComp = le32(b, fusPowerComp) != 0
-			d.Fiber = le32(b, fusLaser) != 0
-			d.EngFreq = le32(b, fusEngFreq)
-			d.Thickness = float64(int16(binary.LittleEndian.Uint16(b[fusThickness:]))) / 100
-			// int16 : certains anciens .DAT ont autre chose dans les 2 octets suivants
+	// Seules les structures relevées sur les pilotes d'origine sont converties :
+	// une autre taille donnerait des valeurs de remplacement présentées comme fidèles.
+	L := findLayout(len(b), h)
+	if L == nil {
+		return d, fmt.Errorf(T("err.unknownLayout"), len(b))
+	}
+	d.Layout = L
+	d.Raster3D = le32(b, 804) != 0
+	d.Bottom = le32(b, 852) != 0
+	if L.AutoFocus >= 0 {
+		d.AutoFocus = le32(b, L.AutoFocus) != 0
+	}
+	if L.SortOff >= 0 {
+		d.SortOff = le32(b, L.SortOff) != 0
+		d.SortOpt = le32(b, L.SortMode) != 0
+	}
+	if le32(b, 788) != 0 {
+		d.Position = le32(b, L.Position)
+	}
+	if L.Name == "fusion" {
+		d.SpeedComp = le32(b, fusSpeedComp) != 0
+		d.PowerComp = le32(b, fusPowerComp) != 0
+		d.Fiber = le32(b, fusLaser) != 0
+		d.EngFreq = le32(b, fusEngFreq)
+		d.Thickness = float64(int16(binary.LittleEndian.Uint16(b[fusThickness:]))) / 100
+		// int16 : certains anciens .DAT ont autre chose dans les 2 octets suivants
 		// (00 00 30 00 lu en int32 donnait 31457,28 mm).
 		d.Offset = float64(int16(binary.LittleEndian.Uint16(b[fusOffset:]))) / 100
-			d.VectorGrid = le32(b, fusVectorGrid) != 0
-		}
-		if le32(b, 792) != 0 {
-			for k := 0; k < colorMaxCount; k++ {
-				o := colorTable + k*L.ColStride
-				if o+L.ColStride > len(b) || (b[o] == 0 && b[o+1] == 0 && b[o+2] == 0 && le32(b, o+4) == 0 && le32(b, o+8) == 0) {
-					break
-				}
-				c := ColorEntry{
-					RGB:   fmt.Sprintf("%02x%02x%02x", b[o], b[o+1], b[o+2]),
-					Power: int(b[o+3]), Speed: le32(b, o+4), Freq: le32(b, o+8),
-					Engrave: le32(b, o+L.ColEng) != 0, Cut: le32(b, o+L.ColCut) != 0,
-				}
-				if L.ColAir >= 0 {
-					c.HasAir, c.Air = true, le32(b, o+L.ColAir) != 0
-				}
-				if L.ColThick >= 0 {
-					c.Thick = float64(le32(b, o+L.ColThick))
-					c.Fiber = le32(b, o+L.ColLaser) != 0
-					c.Offset = float64(le32(b, o+L.ColOffset))
-				}
-				d.Colors = append(d.Colors, c)
+		d.VectorGrid = le32(b, fusVectorGrid) != 0
+	}
+	if le32(b, 792) != 0 {
+		for k := 0; k < colorMaxCount; k++ {
+			o := colorTable + k*L.ColStride
+			if o+L.ColStride > len(b) || (b[o] == 0 && b[o+1] == 0 && b[o+2] == 0 && le32(b, o+4) == 0 && le32(b, o+8) == 0) {
+				break
 			}
+			c := ColorEntry{
+				RGB:   fmt.Sprintf("%02x%02x%02x", b[o], b[o+1], b[o+2]),
+				Power: int(b[o+3]), Speed: le32(b, o+4), Freq: le32(b, o+8),
+				Engrave: le32(b, o+L.ColEng) != 0, Cut: le32(b, o+L.ColCut) != 0,
+			}
+			if L.ColAir >= 0 {
+				c.HasAir, c.Air = true, le32(b, o+L.ColAir) != 0
+			}
+			if L.ColThick >= 0 {
+				c.Thick = float64(le32(b, o+L.ColThick))
+				c.Fiber = le32(b, o+L.ColLaser) != 0
+				c.Offset = float64(le32(b, o+L.ColOffset))
+			}
+			d.Colors = append(d.Colors, c)
 		}
 	}
 	d.Passes = PassesFromName(d.Name)
@@ -636,6 +653,17 @@ type Result struct {
 
 var ErrFolderExists = errors.New("folder exists")
 
+// CheckLaser : la source choisie (CO2 ou Fibre) doit exister sur la machine.
+func CheckLaser(o Options) error {
+	if o.Fiber && !o.Machine.HasFiber() {
+		return fmt.Errorf(T("err.noFiber"), o.Machine.Name)
+	}
+	if !o.Fiber && !o.Machine.HasCO2() {
+		return fmt.Errorf(T("err.noCO2"), o.Machine.Name)
+	}
+	return nil
+}
+
 func FindJobFolder(db DB, name string) (int64, error) {
 	rows, err := db.Query(`SELECT ID FROM MaterialFolders WHERE ForJobSettings=1 AND Name=?`, name)
 	if err != nil || len(rows) == 0 {
@@ -745,6 +773,9 @@ func Convert(db DB, o Options, logf func(string), progress func(done, total int)
 	if err := CheckSchema(db); err != nil {
 		return res, err
 	}
+	if err := CheckLaser(o); err != nil {
+		return res, err
+	}
 	paths, err := ListDats(o.DatDir, o.Recursive)
 	if err != nil {
 		return res, fmt.Errorf(T("err.readDir"), err)
@@ -765,6 +796,11 @@ func Convert(db DB, o Options, logf func(string), progress func(done, total int)
 		if strings.HasPrefix(low, "param1") || strings.HasPrefix(low, "param2") {
 			res.Skipped = append(res.Skipped, Tf("skip.fmt", d.Name, T("skip.testGrid")))
 			logf(Tf("log.skipped", d.Name, T("skip.testGridLog")))
+			continue
+		}
+		if d.NeedsFiber() && !o.Machine.HasFiber() {
+			res.Skipped = append(res.Skipped, Tf("skip.fmt", d.Name, T("skip.needsFiber")))
+			logf(Tf("log.skipped", d.Name, T("skip.needsFiber")))
 			continue
 		}
 		key := foldKey(d.Name)
@@ -886,9 +922,10 @@ func Convert(db DB, o Options, logf func(string), progress func(done, total int)
 		th := ThicknessMils(d.Name)
 		vf := fnum(math.Round(d.FreqPercent()*1e4) / 1e4)
 		vsort, dith, ord := d.JMSort(o.VectorSort), d.JMDither(), b2i(d.Bottom)
-		// Fusion : source Fibre seulement si la machine de destination en a une.
+		// Fusion : source Fibre du .DAT (les .DAT Fibre vers une machine sans Fibre
+		// ont été écartés plus haut).
 		dl := laser
-		if d.Fiber && o.Machine.HasFiber() {
+		if d.Fiber {
 			dl = 1
 		}
 		grav := proc{name: en, ptype: 1, thick: 0, rp: d.RPower, rs: d.RSpeed, dpi: d.DPI, vp: 50, vs: 50, vf: "50", air: 0, sort: vsort, pulse: "-1", laser: dl, dither: dith, order: ord}
@@ -915,7 +952,7 @@ func Convert(db DB, o Options, logf func(string), progress func(done, total int)
 		for _, c := range d.Colors {
 			cn := en + " #" + strings.ToUpper(c.RGB)
 			cl := dl
-			if c.Fiber && o.Machine.HasFiber() {
+			if c.Fiber {
 				cl = 1
 			}
 			setFusion := func(p *proc) {

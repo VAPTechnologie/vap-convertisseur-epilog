@@ -760,9 +760,20 @@ func (a *app) countDats(autoLaser bool) {
 		return
 	}
 	setText(a.ctl[idDatInfo], Tf("info.count", len(ps)))
-	if autoLaser && strings.Contains(foldKey(dir), "fibre") || strings.Contains(foldKey(dir), "fiber") {
-		send(a.ctl[idLaser], cbSetCurSel, 1, 0)
+	// dossier « … fibre … » : Fibre proposée, si la machine choisie en a une
+	if autoLaser && (strings.Contains(foldKey(dir), "fibre") || strings.Contains(foldKey(dir), "fiber")) {
+		if m, ok := a.curMachine(); !ok || m.HasFiber() {
+			send(a.ctl[idLaser], cbSetCurSel, 1, 0)
+		}
 	}
+}
+
+func (a *app) curMachine() (Machine, bool) {
+	i := int(int32(send(a.ctl[idMachine], cbGetCurSel, 0, 0)))
+	if i < 0 || i >= len(a.machines) {
+		return Machine{}, false
+	}
+	return a.machines[i], true
 }
 
 // fixDatDir : si le dossier choisi est un dossier de résultat, propose le dossier source.
@@ -823,14 +834,20 @@ func (a *app) selectMachine(i int) {
 	send(a.ctl[idMachine], cbSetCurSel, uintptr(i), 0)
 	m := a.machines[i]
 	setText(a.ctl[idFolderName], m.Name)
-	if m.HasFiber() && !m.HasCO2() {
+	// source imposée quand la machine n'en a qu'une, au choix sinon
+	switch {
+	case !m.HasFiber():
+		send(a.ctl[idLaser], cbSetCurSel, 0, 0)
+	case !m.HasCO2():
 		send(a.ctl[idLaser], cbSetCurSel, 1, 0)
 	}
+	enable(a.ctl[idLaser], m.HasCO2() && m.HasFiber())
 }
 
 func (a *app) loadBackup(path string) {
 	send(a.ctl[idMachine], cbResetContent, 0, 0)
 	a.machines = nil
+	enable(a.ctl[idLaser], true)
 	db, err := openRO(path)
 	if err != nil {
 		msgBox(a.hwnd, T("err.openBackup")+err.Error(), T("msg.title"), mbIconError)
