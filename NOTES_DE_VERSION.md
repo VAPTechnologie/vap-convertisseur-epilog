@@ -2,6 +2,19 @@
 
 Le VAP Convertisseur Epilog reprend les anciens réglages des pilotes Epilog (fichiers .DAT) et les range automatiquement dans Epilog Job Manager. Vos années de réglages matières passent dans Job Manager en un clic, sans rien ressaisir.
 
+## Version 2.0 — octobre 2026
+
+Une nouvelle interface sombre, aux couleurs de la suite VAP, plus lisible et mieux adaptée aux petits écrans. La conversion ne change pas : mêmes réglages produits, mêmes contrôles.
+
+- **Thème sombre VAP** : bleu nuit, étapes dans des panneaux arrondis, bouton « Convertir » mis en avant, barre de titre sombre.
+- **Lisibilité** : contrastes vérifiés (au moins 4,5:1 pour les textes, 3:1 pour les contours), états survol, focus et verrouillé bien distincts.
+- **Assistance d'air** : un badge « Obligatoire » explique pourquoi la case ne peut pas être décochée.
+- **Journal coloré** : réussites, avertissements et erreurs se distinguent d'un coup d'œil, avec leur symbole ; barre de défilement bien visible.
+- **Questions plus claires** : « Remplacer / Annuler » (Annuler par défaut) et « Ouvrir le dossier / Fermer » ; le bilan apparaît juste après le résultat.
+- **Notice** plus confortable à lire : titres hiérarchisés, avertissement de sauvegarde en évidence.
+- **Petits écrans** : la fenêtre s'adapte (1366 × 768 à 125 % et 150 %) sans bouton caché ni texte coupé.
+- **Quitter** n'a plus d'effet pendant une conversion, comme la croix de la fenêtre.
+
 ## Version 1.8 — octobre 2026
 
 Un réglage incomplet ou incompatible ne peut plus passer pour une conversion fidèle.
