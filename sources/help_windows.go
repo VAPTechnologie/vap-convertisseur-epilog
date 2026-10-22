@@ -3,6 +3,7 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 	"syscall"
 	"unsafe"
@@ -13,47 +14,43 @@ var (
 	helpEdit  uintptr
 	helpClose uintptr
 	helpClass bool
-)
-
-const (
-	helpW  = 700
-	helpH  = 640
-	helpHd = 70
+	helpCB    = syscall.NewCallback(helpProc)
+	helpSize  struct{ w, h, hdr, foot int } // unités logiques
 )
 
 func helpProc(hwnd, msg, wParam, lParam uintptr) uintptr {
 	a := A
 	switch uint32(msg) {
 	case wmPaint:
-		var ps paintStruct
-		hdc, _, _ := pBeginPaint.Call(hwnd, uintptr(unsafe.Pointer(&ps)))
-		var rc rect
-		pGetClientRect.Call(hwnd, uintptr(unsafe.Pointer(&rc)))
-		hdr := rect{0, 0, rc.r, int32(a.s(helpHd))}
-		pFillRect.Call(hdc, uintptr(unsafe.Pointer(&hdr)), a.brHeader)
-		acc := rect{0, int32(a.s(helpHd)), rc.r, int32(a.s(helpHd + 4))}
-		pFillRect.Call(hdc, uintptr(unsafe.Pointer(&acc)), a.brAccent)
-		tx := a.logoTitleX(hdc, 20, helpHd/2, 24)
-		if tx == 20 && a.icoBig != 0 {
-			pDrawIconEx.Call(hdc, uintptr(a.s(20)), uintptr(a.s(10)), a.icoBig, uintptr(a.s(50)), uintptr(a.s(50)), 0, 0, 3)
-			tx = 86
-		}
-		pSetBkMode.Call(hdc, 1)
-		old, _, _ := pSelectObject.Call(hdc, a.fontTitle)
-		pSetTextColor.Call(hdc, colTitle)
-		t := rect{int32(a.s(tx)), 0, rc.r - int32(a.s(16)), int32(a.s(helpHd))}
-		pDrawTextW.Call(hdc, wp(T("help.title")), ^uintptr(0), uintptr(unsafe.Pointer(&t)), dtLeft|dtVCenter|dtSingleLine|dtNoPrefix)
-		pSelectObject.Call(hdc, a.fontSmall)
-		pSetTextColor.Call(hdc, colMuted)
-		f := rect{int32(a.s(20)), int32(a.s(helpH - 50)), int32(a.s(helpW - 160)), int32(a.s(helpH - 16))}
-		pDrawTextW.Call(hdc, wp(appSignature), ^uintptr(0), uintptr(unsafe.Pointer(&f)), dtLeft|dtVCenter|dtSingleLine|dtNoPrefix)
-		pSelectObject.Call(hdc, old)
-		pEndPaint.Call(hwnd, uintptr(unsafe.Pointer(&ps)))
+		paintBuffered(hwnd, func(hdc uintptr) {
+			var rc rect
+			pGetClientRect.Call(hwnd, uintptr(unsafe.Pointer(&rc)))
+			fillBox(hdc, 0, 0, rc.r, rc.b, colFond)
+			hs := helpSize
+			a.paintHeader(hdc, rc.r, hs.hdr, 24, T("help.title"), "", hs.w-20)
+			// panneau du texte
+			roundBox(hdc, a.px(rect{20, int32(hs.hdr + 3 + 14), int32(hs.w - 20), int32(hs.h - hs.foot - 12)}), int32(a.s(12)), colPanneau, colFilet)
+			// pied de page
+			fy := int32(a.s(hs.h - hs.foot))
+			fillBox(hdc, 0, fy, rc.r, rc.b, colPanneau)
+			fillBox(hdc, 0, fy, rc.r, fy+int32(max(1, a.s(1))), colFilet)
+			drawText(hdc, appSignature, rect{int32(a.s(20)), fy, int32(a.s(hs.w - 160)), rc.b}, a.fontSmall, colDiscret, dtLeft|dtVCenter|dtSingleLine)
+		})
 		return 0
-	case wmCtlColorStatic:
-		pSetBkColor.Call(wParam, rgb(255, 255, 255))
-		pSetTextColor.Call(wParam, colText)
-		return a.brWhite
+	case wmEraseBkgnd:
+		return 1
+	case wmCtlColorStatic: // notice sans RichEdit (champ texte simple)
+		pSetBkColor.Call(wParam, colPanneau)
+		pSetTextColor.Call(wParam, colTexte)
+		return brPanneau
+	case wmNotify:
+		if nm := (*nmCustomDrawT)(unsafe.Pointer(lParam)); nm.hdr.code == nmCustomDraw && nm.hdr.hwndFrom == helpClose {
+			if nm.drawStage != cddsPrepaint {
+				return cdrfDoDefault
+			}
+			a.drawButton(nm, false, colPanneau)
+			return cdrfSkipDef
+		}
 	case wmCommand:
 		if int(wParam&0xFFFF) == idHelpClose || int(wParam&0xFFFF) == 2 {
 			pDestroyWindow.Call(hwnd)
@@ -81,9 +78,9 @@ func (a *app) showHelp() {
 	if !helpClass {
 		wc := wndClassEx{
 			style:         0x3,
-			lpfnWndProc:   syscall.NewCallback(helpProc),
+			lpfnWndProc:   helpCB,
 			hInstance:     a.hInst,
-			hbrBackground: a.brBody,
+			hbrBackground: brFond,
 			lpszClassName: cls,
 		}
 		wc.hCursor, _, _ = pLoadCursorW.Call(0, 32512)
@@ -93,32 +90,112 @@ func (a *app) showHelp() {
 		pRegisterClassExW.Call(uintptr(unsafe.Pointer(&wc)))
 		helpClass = true
 	}
+	// taille : 780 × 720 au plus, toujours dans la zone de travail
 	style := uint32(wsOverlapped | wsCaption | wsSysMenu | wsClipChildren)
-	rc := rect{0, 0, int32(a.s(helpW)), int32(a.s(helpH))}
+	wa := workArea()
+	fr := rect{0, 0, 100, 100}
+	pAdjustWindowRectEx.Call(uintptr(unsafe.Pointer(&fr)), uintptr(style), 0, wsExControlPar)
+	m := a.m()
+	helpSize.hdr, helpSize.foot = m.hdr-6, m.foot
+	helpSize.w = min(780, int(wa.r-wa.l-(fr.r-fr.l-100)-16)*96/a.dpi)
+	helpSize.h = min(720, int(wa.b-wa.t-(fr.b-fr.t-100)-8)*96/a.dpi)
+	hs := helpSize
+	rc := rect{0, 0, int32(a.s(hs.w)), int32(a.s(hs.h))}
 	pAdjustWindowRectEx.Call(uintptr(unsafe.Pointer(&rc)), uintptr(style), 0, wsExControlPar)
 	ww, wh := rc.r-rc.l, rc.b-rc.t
-	sw, _, _ := pGetSystemMetrics.Call(0)
-	sh, _, _ := pGetSystemMetrics.Call(1)
-	x, y := (int32(sw)-ww)/2, (int32(sh)-wh)/2
-	if y < 0 {
-		y = 0
-	}
+	x, y := wa.l+(wa.r-wa.l-ww)/2, wa.t+(wa.b-wa.t-wh)/2
+	x, y = max(x, wa.l), max(y, wa.t)
 	helpHwnd, _, _ = pCreateWindowExW.Call(wsExControlPar, uintptr(unsafe.Pointer(cls)), wp(T("help.caption")),
 		uintptr(style), uintptr(x), uintptr(y), uintptr(ww), uintptr(wh), a.hwnd, 0, a.hInst, 0)
 	if helpHwnd == 0 {
 		return
 	}
+	darkTitle(helpHwnd)
 	mk := func(class, text string, st, ex uint32, x, y, w, h, id int) uintptr {
 		hw, _, _ := pCreateWindowExW.Call(uintptr(ex), wp(class), wp(text), uintptr(st|wsChild|wsVisible),
 			uintptr(a.s(x)), uintptr(a.s(y)), uintptr(a.s(w)), uintptr(a.s(h)), helpHwnd, uintptr(id), a.hInst, 0)
 		send(hw, wmSetFont, a.fontUI, 1)
 		return hw
 	}
-	helpEdit = mk("EDIT", strings.ReplaceAll(noticeText(), "\n", "\r\n"), esMultiline|esReadOnly|esAutoVScroll|wsVScroll, wsExClientEdge,
-		20, helpHd+18, helpW-40, helpH-helpHd-18-64, idHelpText)
-	helpClose = mk("BUTTON", T("btn.close"), bsDefPushButton|wsTabStop, 0, helpW-20-120, helpH-50, 120, 34, idHelpClose)
+	helpEdit = 0
+	tx, ty := 20+14, hs.hdr+3+14+10
+	tw, th := hs.w-40-20, hs.h-hs.foot-12-10-ty
+	if richOK() {
+		helpEdit = mk(richEditClass, "", esMultiline|esReadOnly|esAutoVScroll|wsVScroll, 0, tx, ty, tw, th, idHelpText)
+	}
+	if helpEdit != 0 {
+		send(helpEdit, emSetBkgndColor, 0, colPanneau)
+		rtf := noticeRTF(noticeText())
+		st := struct{ flags, codepage uint32 }{0, 0} // ST_DEFAULT, texte RTF en ASCII
+		send(helpEdit, emSetTextEx, uintptr(unsafe.Pointer(&st)), uintptr(unsafe.Pointer(&append([]byte(rtf), 0)[0])))
+	} else {
+		helpEdit = mk("EDIT", strings.ReplaceAll(noticeText(), "\n", "\r\n"), esMultiline|esReadOnly|esAutoVScroll|wsVScroll, 0,
+			tx, ty, tw, th, idHelpText)
+	}
+	darkScrollbars(helpEdit)
+	m2 := a.m()
+	bw := max(120, a.measure(a.fontUI, T("btn.close"))+36)
+	helpClose = mk("BUTTON", T("btn.close"), bsDefPushButton|wsTabStop, 0, hs.w-20-bw, hs.h-hs.foot+(hs.foot-m2.btn)/2, bw, m2.btn, idHelpClose)
 	enable(a.hwnd, false)
 	pShowWindow.Call(helpHwnd, 1)
 	pUpdateWindow.Call(helpHwnd)
 	pSetFocus.Call(helpClose)
+}
+
+// noticeRTF : notice mise en forme sans changer le texte. Titres (ligne non indentée
+// après une ligne vide) en gras bleu clair ; premier titre (sauvegarde obligatoire)
+// en orange ; corps en blanc avec un interligne aéré.
+func noticeRTF(text string) string {
+	face, bold, _ := uiFaces()
+	if cur != LZH && cur != LJA {
+		bold = face
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, `{\rtf1\ansi\deff0{\fonttbl{\f0\fnil\fcharset1 %s;}{\f1\fnil\fcharset1 %s;}}`, face, bold)
+	b.WriteString(`{\colortbl ;`)
+	for _, c := range []uintptr{colTexte, colAccentClair, colOrange, colDiscret} {
+		fmt.Fprintf(&b, `\red%d\green%d\blue%d;`, c&0xFF, c>>8&0xFF, c>>16&0xFF)
+	}
+	b.WriteString(`}\uc1`)
+	lines := strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
+	first := true
+	for i, l := range lines {
+		heading := l != "" && l[0] != ' ' && (i == 0 || lines[i-1] == "")
+		switch {
+		case l == "":
+			b.WriteString(`\pard\sa0\sl120\slmult0\fs10\par` + "\n")
+		case heading:
+			col := 2
+			if first {
+				col = 3
+			}
+			first = false
+			fmt.Fprintf(&b, `\pard\sb160\sa100\f1\b\fs24\cf%d `, col)
+			rtfEscape(&b, l)
+			b.WriteString(`\b0\par` + "\n")
+		default:
+			b.WriteString(`\pard\sa0\sl264\slmult1\f0\fs20\cf1 `)
+			rtfEscape(&b, l)
+			b.WriteString(`\par` + "\n")
+		}
+	}
+	b.WriteString("}")
+	return b.String()
+}
+
+// rtfEscape : texte en RTF ASCII (caractères accentués, chinois et japonais en \uN?).
+func rtfEscape(b *strings.Builder, s string) {
+	for _, u := range toUTF16(s) {
+		switch {
+		case u == '\\' || u == '{' || u == '}':
+			b.WriteByte('\\')
+			b.WriteByte(byte(u))
+		case u == '\t':
+			b.WriteString(`\tab `)
+		case u < 0x80:
+			b.WriteByte(byte(u))
+		default:
+			fmt.Fprintf(b, `\u%d?`, int16(u))
+		}
+	}
 }

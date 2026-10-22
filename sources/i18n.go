@@ -244,6 +244,15 @@ var tr = map[string][nLang]string{
 	"btn.close": {
 		"Fermer", "Close", "Cerrar", "Schließen", "Chiudi", "Fechar", "Sluiten", "关闭", "閉じる",
 	},
+	"btn.yes": {
+		"Oui", "Yes", "Sí", "Ja", "Sì", "Sim", "Ja", "是", "はい",
+	},
+	"btn.no": {
+		"Non", "No", "No", "Nein", "No", "Não", "Nee", "否", "いいえ",
+	},
+	"btn.ok": {
+		"OK", "OK", "Aceptar", "OK", "OK", "OK", "OK", "确定", "OK",
+	},
 
 	// ---------------------------------------------------------------- accueil
 	"welcome.0": {

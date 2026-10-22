@@ -16,8 +16,6 @@ var (
 	pSaveDC            = gdi32.NewProc("SaveDC")
 	pRestoreDC         = gdi32.NewProc("RestoreDC")
 	pIntersectClipRect = gdi32.NewProc("IntersectClipRect")
-	pGetSysColor       = user32.NewProc("GetSysColor")
-	pDrawFocusRect     = user32.NewProc("DrawFocusRect")
 )
 
 const (
@@ -159,30 +157,3 @@ func drawFlag(hdc uintptr, l Lang, x, y, w, h int32) {
 }
 
 var pRectangle = gdi32.NewProc("Rectangle")
-
-// drawLangItem : une ligne de la liste des langues (drapeau + nom).
-func (a *app) drawLangItem(di *drawItem) {
-	if int32(di.itemID) < 0 || di.itemID >= uint32(nLang) {
-		return
-	}
-	hdc, r := di.hDC, di.rcItem
-	bg, fg := uintptr(5), uintptr(8) // COLOR_WINDOW, COLOR_WINDOWTEXT
-	if di.itemState&odsSelected != 0 && di.itemState&odsComboEdit == 0 {
-		bg, fg = 13, 14 // COLOR_HIGHLIGHT, COLOR_HIGHLIGHTTEXT
-	}
-	cb, _, _ := pGetSysColor.Call(bg)
-	ct, _, _ := pGetSysColor.Call(fg)
-	fillBox(hdc, r.l, r.t, r.r, r.b, cb)
-	fh := int32(a.s(13))
-	fw := fh * 3 / 2
-	fx := r.l + int32(a.s(5))
-	fy := r.t + (r.b-r.t-fh)/2
-	drawFlag(hdc, Lang(di.itemID), fx, fy, fw, fh)
-	pSetBkMode.Call(hdc, 1) // TRANSPARENT
-	pSetTextColor.Call(hdc, ct)
-	tr := rect{fx + fw + int32(a.s(8)), r.t, r.r - 2, r.b}
-	pDrawTextW.Call(hdc, wp(langNames[di.itemID]), ^uintptr(0), uintptr(unsafe.Pointer(&tr)), dtLeft|dtVCenter|dtSingleLine|dtNoPrefix)
-	if di.itemState&odsFocus != 0 && di.itemState&odsComboEdit == 0 {
-		pDrawFocusRect.Call(hdc, uintptr(unsafe.Pointer(&r)))
-	}
-}
