@@ -512,6 +512,9 @@ func (a *app) buildUI() {
 	a.child("STATIC", "", ssLeft|ssNotify|ssEndEllip|ssCenterImg, 0, 0, 0, 10, 10, idUpdate)
 	enable(a.ctl[idOpen], false)
 	a.themeCombo(a.ctl[idLang], colFond)
+	for _, id := range []int{idDatEdit, idBkEdit, idFolderName} {
+		a.themeEdit(a.ctl[id])
+	}
 	for _, id := range []int{idMachine, idSort, idLaser} {
 		a.themeCombo(a.ctl[id], colPanneau)
 	}

@@ -149,6 +149,7 @@ func initTheme() {
 	brPanneau, _, _ = pCreateSolidBrush.Call(colPanneau)
 	brDoux, _, _ = pCreateSolidBrush.Call(colDoux)
 	comboCB = syscall.NewCallback(comboProc)
+	editCB = syscall.NewCallback(editProc)
 }
 
 // darkTitle : barre de titre sombre (Windows 10 2004+ / 11) ; sans effet ailleurs.
@@ -554,4 +555,39 @@ func (a *app) drawComboItem(di *drawItem) {
 	}
 	font, _, _ := pSendMessageW.Call(di.hwndItem, wmGetFont, 0, 0)
 	drawText(hdc, s, tr, font, fg, dtLeft|dtVCenter|dtSingleLine|dtEndEllip)
+}
+
+// ---------------------------------------------------------------------------
+// Champs verrouillés : Windows impose le gris système au texte d'un champ désactivé
+// (3,6:1 sur le fond sombre). Le champ reste désactivé ; seul son dessin est remplacé,
+// valeur en entier ou abrégée au milieu pour un chemin trop long.
+
+var editCB uintptr // syscall.NewCallback(editProc), créé par initTheme
+
+func (a *app) themeEdit(h uintptr) { pSetWindowSubclass.Call(h, editCB, 3, 0) }
+
+func editProc(hwnd, msg, wParam, lParam, id, ref uintptr) uintptr {
+	switch uint32(msg) {
+	case wmPaint:
+		if !isEnabled(hwnd) {
+			var ps paintStruct
+			hdc, _, _ := pBeginPaint.Call(hwnd, uintptr(unsafe.Pointer(&ps)))
+			var r rect
+			pGetClientRect.Call(hwnd, uintptr(unsafe.Pointer(&r)))
+			fillBox(hdc, r.l, r.t, r.r, r.b, colFond)
+			font, _, _ := pSendMessageW.Call(hwnd, wmGetFont, 0, 0)
+			r.l++
+			drawText(hdc, getText(hwnd), r, font, colInactif, dtLeft|dtVCenter|dtSingleLine|0x4000) // DT_PATH_ELLIPSIS
+			pEndPaint.Call(hwnd, uintptr(unsafe.Pointer(&ps)))
+			return 0
+		}
+	case wmEraseBkgnd:
+		if !isEnabled(hwnd) {
+			return 1
+		}
+	case wmNcDestroy:
+		pRemoveWindowSubclass.Call(hwnd, editCB, id)
+	}
+	r, _, _ := pDefSubclassProc.Call(hwnd, msg, wParam, lParam)
+	return r
 }

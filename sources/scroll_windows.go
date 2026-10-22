@@ -85,7 +85,14 @@ func (a *app) newScrollBar(parent, target uintptr) uintptr {
 		return 0
 	}
 	scrollTarget[bar], scrollBar[target], scrollState[bar] = target, bar, &barState{}
-	pSetWindowSubclass.Call(target, scrollSubCB, 2, 0)
+	if ok, _, _ := pSetWindowSubclass.Call(target, scrollSubCB, 2, 0); ok == 0 {
+		// suivi impossible : barre de Windows à la place
+		delete(scrollTarget, bar)
+		delete(scrollBar, target)
+		delete(scrollState, bar)
+		pDestroyWindow.Call(bar)
+		return 0
+	}
 	return bar
 }
 
@@ -101,7 +108,9 @@ func (a *app) placeScroll(target, bar uintptr, r rect) {
 	// la barre de Windows dépasse sous la marge et la barre VAP ; la région la cache
 	pMoveWindow.Call(target, uintptr(r.l), uintptr(r.t), uintptr(tw+int32(sb)), uintptr(r.b-r.t), 1)
 	rgn, _, _ := pCreateRectRgn.Call(0, 0, uintptr(tw), uintptr(r.b-r.t))
-	pSetWindowRgn.Call(target, rgn, 1) // la région appartient désormais à la fenêtre
+	if ok, _, _ := pSetWindowRgn.Call(target, rgn, 1); ok == 0 && rgn != 0 {
+		pDeleteObject.Call(rgn) // la région n'appartient à la fenêtre qu'en cas de succès
+	}
 	pMoveWindow.Call(bar, uintptr(r.r-bw), uintptr(r.t), uintptr(bw), uintptr(r.b-r.t), 1)
 	pSetWindowPos.Call(bar, 0, 0, 0, 0, 0, 0x1|0x2|0x10) // au-dessus du texte (HWND_TOP, sans bouger)
 	// marge intérieure du texte
@@ -195,6 +204,12 @@ func scrollProc(hwnd, msg, wParam, lParam uintptr) uintptr {
 			send(target, wmVScroll, 3, 0) // SB_PAGEDOWN
 		}
 		pInvalidateRect.Call(hwnd, 0, 0)
+		return 0
+	case 0x0215: // WM_CAPTURECHANGED : glissement interrompu (Alt+Tab, autre fenêtre…)
+		if st != nil && st.drag {
+			st.drag = false
+			pInvalidateRect.Call(hwnd, 0, 0)
+		}
 		return 0
 	case wmLButtonUp:
 		if st != nil && st.drag {

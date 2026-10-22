@@ -76,6 +76,27 @@ func init() {
 		}
 		const wmChangeUIState = 0x0127
 		send(a.hwnd, wmChangeUIState, 2|1<<16, 0) // UIS_CLEAR, UISF_HIDEFOCUS : focus visible
+		keyTest := func(label, key string, vk uintptr, ask func() int) func() {
+			return func() {
+				capSteps = append(capSteps[:capStep], append([]func(){func() {
+					h, _, _ := pLastPopup.Call(A.hwnd)
+					f, _, _ := pGetFocus.Call()
+					kb(fmt.Sprintf("%s : focus initial sur « %s », touche %s", label, getText(f), key))
+					if h != 0 && h != A.hwnd {
+						pPostMessageW.Call(f, 0x0100, vk, 0) // WM_KEYDOWN
+					}
+				}}, capSteps[capStep:]...)...)
+				r := ask()
+				names := map[int]string{idYes: "action 1 (IDYES)", idNo: "action 2 (IDNO)", idOK: "OK"}
+				kb("  -> réponse : " + names[r])
+			}
+		}
+		replace := func() int {
+			return msgChoice(a.hwnd, Tf("ask.replace", "MINI24 40 watts"), T("msg.title"), mbIconWarning, "btn.replace", "btn.cancel", false)
+		}
+		finish := func() int {
+			return msgChoice(a.hwnd, Tf("msg.done", 111, "MINI24 40 watts"), T("msg.title"), mbIconInfo, "btn.open", "btn.close", true)
+		}
 		longDat := `C:\Users\Atelier\Documents\Epilog\Engraving_Settings\Anciens réglages de l'atelier de gravure\Mini 24 40 watts - réglages validés par l'atelier`
 		longFolder := "Mini 24 40 watts – atelier principal – réglages validés 2026"
 		for _, l := range langs {
@@ -99,13 +120,13 @@ func init() {
 					a.fillDemo(longDat, longFolder)
 					pSetFocus.Call(a.ctl[idConvert])
 				},
-				func() { shot(a.hwnd, p+"2-rempli") },
+				func() { shot(a.hwnd, p+"2-rempli"); a.checkFit(p + "fenêtre remplie") },
 				func() { // pendant une conversion : contrôles verrouillés (comme convert())
 					for _, id := range lockedIDs {
 						enable(a.ctl[id], false)
 					}
 				},
-				func() { shot(a.hwnd, p+"3-verrouille") },
+				func() { shot(a.hwnd, p+"3-verrouille"); a.checkFit(p + "fenêtre verrouillée") },
 				func() {
 					for _, id := range lockedIDs {
 						enable(a.ctl[id], id != idOpen)
@@ -115,6 +136,11 @@ func init() {
 				func() { a.showHelp() },
 				func() { shot(helpHwnd, p+"4-notice") },
 				func() { pPostMessageW.Call(helpHwnd, wmClose, 0, 0) },
+				func() { kb("[" + langCodes[l] + "]") },
+				keyTest("Remplacer / Annuler", "Entrée", 0x0D, replace),
+				keyTest("Remplacer / Annuler", "Échap", 0x1B, replace),
+				keyTest("Ouvrir le dossier / Fermer", "Entrée", 0x0D, finish),
+				keyTest("Ouvrir le dossier / Fermer", "Échap", 0x1B, finish),
 				func() {
 					dialogShot(p + "5-remplacer")
 					msgChoice(a.hwnd, Tf("ask.replace", longFolder), T("msg.title"), mbIconWarning, "btn.replace", "btn.cancel", false)
@@ -145,32 +171,7 @@ func init() {
 				pPostMessageW.Call(f, 0x0100, 0x09, 0) // WM_KEYDOWN Tab
 			})
 		}
-		keyTest := func(label, key string, vk uintptr, ask func() int) func() {
-			return func() {
-				capSteps = append(capSteps[:capStep], append([]func(){func() {
-					h, _, _ := pLastPopup.Call(A.hwnd)
-					f, _, _ := pGetFocus.Call()
-					kb(fmt.Sprintf("%s : focus initial sur « %s », touche %s", label, getText(f), key))
-					if h != 0 && h != A.hwnd {
-						pPostMessageW.Call(f, 0x0100, vk, 0) // WM_KEYDOWN
-					}
-				}}, capSteps[capStep:]...)...)
-				r := ask()
-				names := map[int]string{idYes: "action 1 (IDYES)", idNo: "action 2 (IDNO)", idOK: "OK"}
-				kb("  -> réponse : " + names[r])
-			}
-		}
-		replace := func() int {
-			return msgChoice(a.hwnd, Tf("ask.replace", "MINI24 40 watts"), T("msg.title"), mbIconWarning, "btn.replace", "btn.cancel", false)
-		}
-		finish := func() int {
-			return msgChoice(a.hwnd, Tf("msg.done", 111, "MINI24 40 watts"), T("msg.title"), mbIconInfo, "btn.open", "btn.close", true)
-		}
 		capSteps = append(capSteps,
-			keyTest("Remplacer / Annuler", "Entrée", 0x0D, replace),
-			keyTest("Remplacer / Annuler", "Échap", 0x1B, replace),
-			keyTest("Ouvrir le dossier / Fermer", "Entrée", 0x0D, finish),
-			keyTest("Ouvrir le dossier / Fermer", "Échap", 0x1B, finish),
 			func() {
 				os.WriteFile(filepath.Join(capDir, capPrefix+"clavier.txt"), []byte(strings.Join(kbLines, "\r\n")+"\r\n"), 0o644)
 				pPostMessageW.Call(a.hwnd, wmClose, 0, 0)
@@ -277,8 +278,26 @@ func (a *app) checkFit(label string) {
 			bad = append(bad, fmt.Sprintf("contrôle %s hors fenêtre", ctlName(id)))
 		}
 	}
+	ids := []int{idHelp, idLang, idDatEdit, idDatBrowse, idRecursive, idDatInfo, idBkEdit, idBkBrowse, idLblMachine, idMachine,
+		idLblFolder, idFolderName, idAir, idLblSort, idSort, idTop, idLblLaser, idLaser, idLog, idOpen, idConvert, idQuit, idDonate, idSuggest, idUpdate}
+	vis := func(id int) (rect, bool) {
+		r := childRect(a.hwnd, a.ctl[id])
+		if f, ok := a.frames[id]; ok { // champ : son cadre dessiné
+			r = f
+		}
+		return r, isVisible(a.ctl[id])
+	}
+	for i, x := range ids {
+		for _, y := range ids[i+1:] {
+			rx, vx := vis(x)
+			ry, vy := vis(y)
+			if vx && vy && rx.l < ry.r && ry.l < rx.r && rx.t < ry.b && ry.t < rx.b {
+				bad = append(bad, fmt.Sprintf("chevauchement %s / %s", ctlName(x), ctlName(y)))
+			}
+		}
+	}
 	if len(bad) == 0 {
-		kb(label + " : aucun débordement")
+		kb(label + " : aucun débordement ni chevauchement")
 		return
 	}
 	for _, b := range bad {
@@ -297,9 +316,9 @@ func (a *app) fillDemo(dat, folder string) {
 	setText(a.ctl[idDatEdit], dat)
 	setText(a.ctl[idBkEdit], `C:\Users\Atelier\Documents\Sauvegardes Job Manager\EpilogDatabase_Backup_10-22-2026 - atelier.epidb`)
 	setText(a.ctl[idFolderName], folder)
-	setText(a.ctl[idDatInfo], Tf("info.count", 112))
+	setText(a.ctl[idDatInfo], Tf("info.count", 3125))
 	send(a.ctl[idMachine], cbResetContent, 0, 0)
-	for _, k := range []string{"MINI24 40 watts", "Fusion 32 Fibre"} {
+	for _, k := range []string{"Fusion 40 Fibre 50 watts – atelier principal (laser n° 2)", "MINI24 40 watts"} {
 		send(a.ctl[idMachine], cbAddString, 0, wp(k))
 	}
 	send(a.ctl[idMachine], cbSetCurSel, 0, 0)
