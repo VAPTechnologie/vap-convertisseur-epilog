@@ -49,7 +49,7 @@ func helpProc(hwnd, msg, wParam, lParam uintptr) uintptr {
 			if nm.drawStage != cddsPrepaint {
 				return cdrfDoDefault
 			}
-			a.drawButton(nm, false, colPanneau)
+			a.drawButton(nm, btnNormal, colPanneau)
 			return cdrfSkipDef
 		}
 	case wmCommand:
@@ -125,7 +125,7 @@ func (a *app) showHelp() {
 	tx, ty := 20+14, hs.hdr+3+14+10
 	tw, th := hs.w-40-20, hs.h-hs.foot-12-10-ty
 	if richOK() {
-		helpEdit = mk(richEditClass, "", esMultiline|esReadOnly|esAutoVScroll|wsVScroll, 0, tx, ty, tw, th, idHelpText)
+		helpEdit = mk(richEditClass, "", esMultiline|esReadOnly|esAutoVScroll|wsVScroll|esDisableNoScrl, 0, tx, ty, tw, th, idHelpText)
 	}
 	if helpEdit != 0 {
 		send(helpEdit, emSetBkgndColor, 0, colPanneau)
@@ -138,6 +138,9 @@ func (a *app) showHelp() {
 			tx, ty, tw, th, idHelpText)
 	}
 	darkScrollbars(helpEdit)
+	// barre de défilement VAP, bien visible à droite du texte
+	bar := a.newScrollBar(helpHwnd, helpEdit)
+	a.placeScroll(helpEdit, bar, a.px(rect{int32(tx), int32(ty), int32(tx + tw + 8), int32(ty + th)}))
 	m2 := a.m()
 	bw := max(120, a.measure(a.fontUI, T("btn.close"))+36)
 	helpClose = mk("BUTTON", T("btn.close"), bsDefPushButton|wsTabStop, 0, hs.w-20-bw, hs.h-hs.foot+(hs.foot-m2.btn)/2, bw, m2.btn, idHelpClose)
@@ -166,7 +169,7 @@ func noticeRTF(text string) string {
 	lines := strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
 	first := true
 	for i, l := range lines {
-		heading := l != "" && l[0] != ' ' && (i == 0 || lines[i-1] == "")
+		heading := isHeading(lines, i)
 		switch {
 		case l == "":
 			b.WriteString(`\pard\sa0\sl120\slmult0\fs10\par` + "\n")
@@ -180,13 +183,37 @@ func noticeRTF(text string) string {
 			rtfEscape(&b, l)
 			b.WriteString(`\b0\par` + "\n")
 		default:
-			b.WriteString(`\pard\sa0\sl264\slmult1\f0\fs20\cf1 `)
-			rtfEscape(&b, l)
+			// retrait d'après les espaces de tête (texte inchangé) ; chaque nouvel élément
+			// (puce, étape numérotée, ligne de premier niveau) est un peu séparé du précédent
+			t := strings.TrimLeft(l, " ")
+			indent := len(l) - len(t)
+			item := indent <= 2 || strings.HasPrefix(t, "•") || startsNumbered(t)
+			sb := 0
+			if item && i > 0 && lines[i-1] != "" && !isHeading(lines, i-1) {
+				sb = 70
+			}
+			fmt.Fprintf(&b, `\pard\li%d\sb%d\sa0\sl276\slmult1\f0\fs20\cf1 `, indent*110, sb)
+			rtfEscape(&b, t)
 			b.WriteString(`\par` + "\n")
 		}
 	}
 	b.WriteString("}")
 	return b.String()
+}
+
+// isHeading : titre de la notice = ligne non indentée après une ligne vide (ou première ligne).
+func isHeading(lines []string, i int) bool {
+	l := lines[i]
+	return l != "" && l[0] != ' ' && (i == 0 || lines[i-1] == "")
+}
+
+// startsNumbered : « 12. … » (étape numérotée de la notice).
+func startsNumbered(t string) bool {
+	n := 0
+	for n < len(t) && t[n] >= '0' && t[n] <= '9' {
+		n++
+	}
+	return n > 0 && n < len(t) && t[n] == '.'
 }
 
 // rtfEscape : texte en RTF ASCII (caractères accentués, chinois et japonais en \uN?).

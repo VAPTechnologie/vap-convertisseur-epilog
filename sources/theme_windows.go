@@ -20,17 +20,21 @@ var (
 	colDoux        = rgb(0x16, 0x21, 0x3A)
 	colFilet       = rgb(0x22, 0x30, 0x4D)
 	colTexte       = rgb(0xE6, 0xED, 0xF7)
-	colDiscret     = rgb(0x8F, 0xA1, 0xBD)
+	colDiscret     = rgb(0xA9, 0xB8, 0xD0) // textes secondaires : 8,6:1 sur un panneau (Analyseur : #8FA1BD, 6,6:1)
 	colAccent      = rgb(0x2E, 0x8B, 0xFF)
 	colAccentClair = rgb(0x5F, 0xB0, 0xFF)
 	colTexteAccent = rgb(0xFF, 0xFF, 0xFF)
 	colSelection   = rgb(0x1B, 0x33, 0x58)
 	colEnteteDebut = rgb(0x0D, 0x17, 0x30)
-	colInactif     = rgb(0x4E, 0x5E, 0x78)
+	colInactif     = rgb(0x7C, 0x8A, 0xA3) // contrôle verrouillé : encore lisible (5:1)
 	colSurvol      = rgb(0x2C, 0x3E, 0x63)
-	colBordSurvol  = rgb(0x34, 0x50, 0x7F)
-	colImpose      = rgb(0x2A, 0x45, 0x70) // case cochée mais verrouillée
-	colVert        = rgb(0x2B, 0xB6, 0x73)
+	colBord        = rgb(0x5B, 0x70, 0x96) // contour des champs, cases et boutons : 3,5:1
+	colBordSurvol  = rgb(0x74, 0x88, 0xAD) // survol : 4,9:1
+	colPrincipal   = rgb(0x1F, 0x6F, 0xE0) // fond de « Convertir » : texte blanc à 4,8:1
+	colPrincipalOn = rgb(0x1A, 0x5E, 0xC4) // « Convertir » enfoncé
+	colAnneau      = rgb(0x9C, 0xCB, 0xFF) // bord de « Convertir » survolé
+	colImpose      = rgb(0x3A, 0x4F, 0x72) // case cochée mais verrouillée
+	colVert        = rgb(0x3B, 0xC9, 0x84)
 	colOrange      = rgb(0xF3, 0xB0, 0x2B)
 	colRouge       = rgb(0xFF, 0x5A, 0x5A)
 	colSeparateur  = rgb(70, 90, 120) // trait après le logo
@@ -255,45 +259,86 @@ func isEnabled(h uintptr) bool { r, _, _ := pIsWindowEnabled.Call(h); return r !
 // ---------------------------------------------------------------------------
 // Boutons et cases à cocher (NM_CUSTOMDRAW)
 
-// drawButton : bouton arrondi ; principal = bleu VAP (comme « Scanner » dans l'Analyseur).
-func (a *app) drawButton(nm *nmCustomDrawT, primary bool, back uintptr) {
+const (
+	btnNormal  = iota // bouton secondaire
+	btnPrimary        // action principale bleue (« Convertir », comme « Scanner »)
+	btnLink           // lien discret (don, suggestion), comme QPushButton#lien
+)
+
+// drawButton : bouton arrondi. États : normal, survol, enfoncé, focus (clavier), désactivé.
+func (a *app) drawButton(nm *nmCustomDrawT, kind int, back uintptr) {
 	hdc, r, st := nm.hdc, nm.rc, nm.itemState
 	fillBox(hdc, r.l, r.t, r.r, r.b, back)
-	bg, bd, fg := colDoux, colFilet, colTexte
-	switch {
-	case st&cdisDisabled != 0:
-		bg, bd, fg = colPanneau, colFilet, colInactif
-		if primary {
-			bg = colDoux
+	off, hot, down := st&cdisDisabled != 0, st&cdisHot != 0, st&cdisSelected != 0
+	font, _, _ := pSendMessageW.Call(nm.hdr.hwndFrom, wmGetFont, 0, 0)
+	text := getText(nm.hdr.hwndFrom)
+	rad := int32(a.s(7))
+	in := int32(max(2, a.s(2)))
+	focus := st&cdisFocus != 0 && !off && st&cdisShowKbCues != 0
+	if kind == btnLink {
+		fg := colAccentClair
+		if hot || down {
+			fg = colTexte
 		}
-	case primary && st&cdisSelected != 0:
-		bg, bd, fg = colAccent, colAccentClair, colTexteAccent
-	case primary && st&cdisHot != 0:
-		bg, bd, fg = colAccentClair, colAccentClair, colTexteAccent
-	case primary:
-		bg, bd, fg = colAccent, colAccent, colTexteAccent
-	case st&cdisSelected != 0:
-		bg, bd = colSelection, colBordSurvol
-	case st&cdisHot != 0:
+		drawText(hdc, text, r, font, fg, dtCenter|dtVCenter|dtSingleLine|dtEndEllip)
+		if hot || down { // souligné au survol
+			w := int32(a.measurePx(font, text))
+			cx, y := (r.l+r.r)/2, (r.t+r.b)/2+textHeight(a.hwnd, font)/2
+			fillBox(hdc, cx-w/2, y, cx+w/2, y+int32(max(1, a.s(1))), fg)
+		}
+		if focus {
+			roundFrame(hdc, rect{r.l + 1, r.t + in, r.r - 1, r.b - in}, rad, colAccentClair)
+		}
+		return
+	}
+	bg, bd, fg := colDoux, colBord, colTexte
+	switch {
+	case off:
+		bg, bd, fg = colFond, colFilet, colInactif
+	case kind == btnPrimary && down:
+		bg, bd, fg = colPrincipalOn, colAnneau, colTexteAccent
+	case kind == btnPrimary && hot:
+		bg, bd, fg = colPrincipal, colAnneau, colTexteAccent
+	case kind == btnPrimary:
+		bg, bd, fg = colPrincipal, colPrincipal, colTexteAccent
+	case down:
+		bg, bd = colSelection, colAccent
+	case hot:
 		bg, bd = colSurvol, colBordSurvol
 	}
-	rad := int32(a.s(7))
 	roundBox(hdc, r, rad, bg, bd)
-	if st&cdisFocus != 0 && st&cdisDisabled == 0 && st&cdisShowKbCues != 0 {
-		in := int32(max(2, a.s(2)))
+	if kind == btnPrimary && hot && !off { // survol de l'action principale : bord clair de 2 px
+		roundFrame(hdc, rect{r.l + 1, r.t + 1, r.r - 1, r.b - 1}, rad, colAnneau)
+	}
+	if focus {
 		ring := colAccentClair
-		if primary {
+		if kind == btnPrimary {
 			ring = colTexteAccent
 		}
 		roundFrame(hdc, rect{r.l + in, r.t + in, r.r - in, r.b - in}, rad-in/2, ring)
 	}
-	font, _, _ := pSendMessageW.Call(nm.hdr.hwndFrom, wmGetFont, 0, 0)
-	drawText(hdc, getText(nm.hdr.hwndFrom), r, font, fg, dtCenter|dtVCenter|dtSingleLine|dtEndEllip)
+	drawText(hdc, text, r, font, fg, dtCenter|dtVCenter|dtSingleLine|dtEndEllip)
+}
+
+// paintField : cadre d'un champ de saisie ou d'une liste (contour 3:1 au moins, bleu et
+// épais avec le focus, fond plus sombre quand le contrôle est verrouillé).
+func (a *app) paintField(hdc uintptr, f rect, focus, on bool) {
+	rad := int32(a.s(8))
+	switch {
+	case !on:
+		roundBox(hdc, f, rad, colFond, colFilet)
+	case focus:
+		roundBox(hdc, f, rad, colPanneau, colAccent)
+		roundFrame(hdc, rect{f.l + 1, f.t + 1, f.r - 1, f.b - 1}, rad-1, colAccent)
+	default:
+		roundBox(hdc, f, rad, colPanneau, colBord)
+	}
 }
 
 // drawCheck : case à cocher de 15 px (comme QCheckBox::indicator), texte sur une ou deux lignes.
-// Une case cochée mais verrouillée (assistance d'air imposée) reste lisible : coche visible, texte bleu-gris.
-func (a *app) drawCheck(nm *nmCustomDrawT, back uintptr) {
+// Une case cochée mais verrouillée (assistance d'air imposée) reste lisible ; avec required,
+// le badge « Obligatoire » explique pourquoi elle ne peut pas être décochée.
+func (a *app) drawCheck(nm *nmCustomDrawT, back uintptr, required bool) {
 	hdc, r, st := nm.hdc, nm.rc, nm.itemState
 	fillBox(hdc, r.l, r.t, r.r, r.b, back)
 	on := send(nm.hdr.hwndFrom, bmGetCheck, 0, 0) == 1
@@ -304,13 +349,13 @@ func (a *app) drawCheck(nm *nmCustomDrawT, back uintptr) {
 	bg, bd := colPanneau, colBordSurvol
 	switch {
 	case on && off:
-		bg, bd = colImpose, colImpose
+		bg, bd = colImpose, colBord
 	case on:
 		bg, bd = colAccent, colAccent
 	case off:
-		bd = colFilet
+		bg, bd = colFond, colBord
 	case st&cdisHot != 0:
-		bd = colAccent
+		bd = colAccentClair
 	}
 	roundBox(hdc, box, int32(a.s(4)), bg, bd)
 	if on {
@@ -335,16 +380,34 @@ func (a *app) drawCheck(nm *nmCustomDrawT, back uintptr) {
 		fg = colDiscret
 	}
 	font, _, _ := pSendMessageW.Call(nm.hdr.hwndFrom, wmGetFont, 0, 0)
+	text := getText(nm.hdr.hwndFrom)
 	tr := rect{x + d + int32(a.s(8)), r.t, r.r, r.b}
+	// badge « Obligatoire » : juste après le texte s'il tient sur la ligne, sinon au bord droit
+	var badge rect
+	bt := T("lbl.required")
+	if required {
+		bw := int32(a.measurePx(a.fontSmall, bt)) + int32(a.s(16))
+		bh := textHeight(a.hwnd, a.fontSmall) + int32(a.s(4))
+		bx := tr.l + int32(a.measurePx(font, text)) + int32(a.s(10))
+		if bx+bw > r.r {
+			bx = r.r - bw
+			tr.r = bx - int32(a.s(8))
+		}
+		badge = rect{bx, (r.t + r.b - bh) / 2, bx + bw, (r.t+r.b-bh)/2 + bh}
+	}
 	// hauteur réelle du texte (une ou deux lignes), centrée verticalement
 	calc := tr
 	of, _, _ := pSelectObject.Call(hdc, font)
-	pDrawTextW.Call(hdc, wp(getText(nm.hdr.hwndFrom)), ^uintptr(0), uintptr(unsafe.Pointer(&calc)), dtWordBreak|dtCalcRect|dtNoPrefix)
+	pDrawTextW.Call(hdc, wp(text), ^uintptr(0), uintptr(unsafe.Pointer(&calc)), dtWordBreak|dtCalcRect|dtNoPrefix)
 	pSelectObject.Call(hdc, of)
 	th := calc.b - calc.t
 	tr.t = r.t + max(0, (r.b-r.t-th)/2)
 	tr.b = tr.t + th
-	drawText(hdc, getText(nm.hdr.hwndFrom), tr, font, fg, dtWordBreak)
+	drawText(hdc, text, tr, font, fg, dtWordBreak)
+	if required {
+		roundBox(hdc, badge, (badge.b-badge.t)/2, colDoux, colBord)
+		drawText(hdc, bt, badge, a.fontSmall, colTexte, dtCenter|dtVCenter|dtSingleLine)
+	}
 	if st&cdisFocus != 0 && st&cdisShowKbCues != 0 {
 		in := int32(max(2, a.s(2)))
 		roundFrame(hdc, rect{box.l - in, box.t - in, box.r + in, box.b + in}, int32(a.s(5)), colAccentClair)
@@ -411,11 +474,14 @@ func (a *app) paintCombo(h, hdc uintptr) {
 	on := isEnabled(h)
 	focus, _, _ := pGetFocus.Call()
 	dropped := send(h, cbGetDropped, 0, 0) != 0
-	bd := colFilet
-	if on && (focus == h || dropped || comboHover[h]) {
-		bd = colAccent
+	switch {
+	case on && (focus == h || dropped):
+		a.paintField(hdc, r, true, true)
+	case on && comboHover[h]:
+		roundBox(hdc, r, int32(a.s(8)), colPanneau, colBordSurvol)
+	default:
+		a.paintField(hdc, r, false, on)
 	}
-	roundBox(hdc, r, int32(a.s(8)), colPanneau, bd)
 	fg := colTexte
 	if !on {
 		fg = colInactif

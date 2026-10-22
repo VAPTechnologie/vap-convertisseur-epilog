@@ -382,6 +382,7 @@ type app struct {
 	busy                                 bool
 	cards                                []card
 	titleRight, footerRight              int  // limites des textes dessinés (unités logiques)
+	titleLeft                            int  // début du titre du dernier bandeau dessiné (contrôle des débordements)
 	inWelcome, welcomeOnly               bool // journal = seulement le message d'accueil
 	newRelease                           release // version plus récente trouvée sur GitHub
 	compact                              bool    // petit écran : en-tête et marges réduits
@@ -391,15 +392,16 @@ type app struct {
 	footY                                int          // haut du pied de page (unités logiques)
 	progress                             int          // 0 à 100
 	richLog                              bool         // journal en couleurs (RichEdit)
+	logBar                               uintptr      // barre de défilement VAP du journal
 	realDpi                              int          // DPI réel du système (texte des RichEdit, en points)
 	logBuf                               strings.Builder
 }
 
 // card : panneau arrondi d'une étape (unités logiques).
 type card struct {
-	y, h  int
-	num   string
-	title string
+	x0, x1, y, h int
+	num          string
+	title        string
 }
 
 var A = &app{ctl: map[int]uintptr{}, frames: map[int]rect{}}
@@ -408,13 +410,16 @@ const cliW = 860
 
 // metrics : dimensions de la fenêtre principale (unités logiques), normales ou compactes
 // (écran 1366 × 768, mise à l'échelle 125 % ou 150 %).
+// En mode compact, les étapes 1 et 2 sont côte à côte : le journal garde de la hauteur
+// sans réduire la taille des textes.
 type metrics struct {
 	hdr, top, pad, title, gap, row, chk, cardGap, prog, foot, btn, logo, logMin, logDesign int
+	side                                                                                   bool
 }
 
 var (
-	normalM  = metrics{hdr: 76, top: 14, pad: 12, title: 26, gap: 8, row: 30, chk: 24, cardGap: 10, prog: 8, foot: 58, btn: 34, logo: 28, logMin: 84, logDesign: 150}
-	compactM = metrics{hdr: 56, top: 6, pad: 6, title: 22, gap: 4, row: 26, chk: 22, cardGap: 5, prog: 6, foot: 46, btn: 30, logo: 22, logMin: 80, logDesign: 130}
+	normalM  = metrics{hdr: 66, top: 12, pad: 10, title: 24, gap: 7, row: 30, chk: 24, cardGap: 8, prog: 8, foot: 54, btn: 34, logo: 26, logMin: 110, logDesign: 200}
+	compactM = metrics{hdr: 48, top: 6, pad: 7, title: 22, gap: 5, row: 28, chk: 22, cardGap: 6, prog: 6, foot: 46, btn: 30, logo: 21, logMin: 84, logDesign: 160, side: true}
 )
 
 func (a *app) m() metrics {
@@ -433,10 +438,18 @@ func (m metrics) cards() [4]int {
 // space : espace autour de la progression et du journal.
 func (m metrics) space() int { return min(10, m.pad+4) }
 
+// cardsHeight : hauteur occupée par les quatre étapes.
+func (m metrics) cardsHeight() int {
+	c := m.cards()
+	if m.side {
+		return max(c[0], c[1]) + c[2] + c[3] + 2*m.cardGap
+	}
+	return c[0] + c[1] + c[2] + c[3] + 3*m.cardGap
+}
+
 // clientHeight : hauteur totale pour un journal de hauteur log.
 func (m metrics) clientHeight(log int) int {
-	c := m.cards()
-	return m.hdr + 3 + m.top + c[0] + c[1] + c[2] + c[3] + 3*m.cardGap + m.space() + m.prog + m.space() + log + m.space() + m.foot
+	return m.hdr + 3 + m.top + m.cardsHeight() + m.space() + m.prog + m.space() + log + m.space() + m.foot
 }
 
 func (a *app) s(v int) int { return v * a.dpi / 96 }
@@ -490,6 +503,7 @@ func (a *app) buildUI() {
 	a.label(idLblLaser, ssLeft)
 	a.child("COMBOBOX", "", combo, 0, 0, 0, 10, 200, idLaser)
 	a.richLog = a.newLog()
+	a.logBar = a.newScrollBar(a.hwnd, a.ctl[idLog])
 	a.child("BUTTON", "", bsPushButton|wsTabStop, 0, 0, 0, 10, 10, idOpen)
 	a.child("BUTTON", "", bsDefPushButton|wsTabStop, 0, 0, 0, 10, 10, idConvert)
 	a.child("BUTTON", "", bsPushButton|wsTabStop, 0, 0, 0, 10, 10, idQuit)
@@ -646,7 +660,7 @@ func (a *app) layout() {
 	for _, n := range langNames {
 		lw = max(lw, a.measure(a.fontUI, n))
 	}
-	lw += 10 + 20 + 8 + 10 + 10 + 6 // marges, drapeau, chevron
+	lw += 10 + 20 + 8 + 10 + 10 + 16 // marges, drapeau, chevron et une petite réserve
 	hw := max(150, tw("btn.help")+36)
 	hy := (m.hdr - m.btn) / 2
 	combo(idLang, x1-lw, hy, lw, m.btn, 300)
@@ -656,28 +670,36 @@ func (a *app) layout() {
 	a.cards = a.cards[:0]
 	ch := m.cards()
 	y := m.hdr + 3 + m.top
-	bw := max(118, tw("btn.browse")+32)
+	bw := max(110, tw("btn.browse")+28)
 
-	// 1 : dossier des .DAT
-	a.cards = append(a.cards, card{y, ch[0], "1", T("sec1")})
+	// 1 : dossier des .DAT ; 2 : sauvegarde .epidb (côte à côte en mode compact)
+	c1x1, c2x0, c2y := x1, x0, y+ch[0]+m.cardGap
+	if m.side {
+		c1x1, c2x0, c2y = (x0+x1)/2-m.cardGap/2, (x0+x1)/2+m.cardGap/2, y
+	}
+	a.cards = append(a.cards, card{x0, c1x1, y, ch[0], "1", T("sec1")})
+	in0, in1 := x0+16, c1x1-16
 	ry := y + m.pad + m.title + m.gap
-	field(idDatEdit, ix0, ry, ix1-ix0-bw-10, m.row)
-	mv(idDatBrowse, ix1-bw, ry, bw, m.row)
+	field(idDatEdit, in0, ry, in1-in0-bw-10, m.row)
+	mv(idDatBrowse, in1-bw, ry, bw, m.row)
 	ry += m.row + m.gap
 	cw := tw("chk.recursive") + 30
-	mv(idRecursive, ix0, ry, cw, m.chk)
-	mv(idDatInfo, ix0+cw+10, ry, ix1-(ix0+cw+10), m.chk)
-	y += ch[0] + m.cardGap
+	mv(idRecursive, in0, ry, cw, m.chk)
+	mv(idDatInfo, in0+cw+10, ry, in1-(in0+cw+10), m.chk)
 
-	// 2 : sauvegarde .epidb
-	a.cards = append(a.cards, card{y, ch[1], "2", T("sec2")})
-	ry = y + m.pad + m.title + m.gap
-	field(idBkEdit, ix0, ry, ix1-ix0-bw-10, m.row)
-	mv(idBkBrowse, ix1-bw, ry, bw, m.row)
-	y += ch[1] + m.cardGap
+	h2 := ch[1]
+	if m.side {
+		h2 = ch[0] // même hauteur que le panneau voisin
+	}
+	a.cards = append(a.cards, card{c2x0, x1, c2y, h2, "2", T("sec2")})
+	in0, in1 = c2x0+16, x1-16
+	ry = c2y + m.pad + m.title + m.gap
+	field(idBkEdit, in0, ry, in1-in0-bw-10, m.row)
+	mv(idBkBrowse, in1-bw, ry, bw, m.row)
+	y = c2y + h2 + m.cardGap
 
 	// 3 : machine et nom du dossier
-	a.cards = append(a.cards, card{y, ch[2], "3", T("sec3")})
+	a.cards = append(a.cards, card{x0, x1, y, ch[2], "3", T("sec3")})
 	ry = y + m.pad + m.title + m.gap
 	w1 := tw("lbl.machine") + 10
 	w2 := tw("lbl.folder") + 10
@@ -693,7 +715,7 @@ func (a *app) layout() {
 	y += ch[2] + m.cardGap
 
 	// 4 : options
-	a.cards = append(a.cards, card{y, ch[3], "4", T("sec4")})
+	a.cards = append(a.cards, card{x0, x1, y, ch[3], "4", T("sec4")})
 	ry = y + m.pad + m.title + m.gap
 	cbw := 150
 	for _, k := range []string{"sort.none", "sort.inout", "sort.opt", "sort.dat", "laser.co2", "laser.fiber"} {
@@ -722,15 +744,7 @@ func (a *app) layout() {
 	}
 	a.logRc = rect{int32(x0), int32(y), int32(x1), int32(logB)}
 	vm := min(6, m.pad-2) // marge haute et basse du texte
-	mv(idLog, x0+12, y+vm, x1-x0-16, logB-y-2*vm)
-	if a.richLog {
-		// marge intérieure du texte
-		var r rect
-		pGetClientRect.Call(a.ctl[idLog], uintptr(unsafe.Pointer(&r)))
-		r.l += int32(a.s(2))
-		r.t += int32(a.s(2))
-		send(a.ctl[idLog], emSetRect, 0, uintptr(unsafe.Pointer(&r)))
-	}
+	a.placeScroll(a.ctl[idLog], a.logBar, a.px(rect{int32(x0 + 12), int32(y + vm), int32(x1 - 6), int32(logB - vm)}))
 
 	// pied de page : signature, don, suggestion | ouvrir, convertir, quitter
 	by := a.footY + (m.foot-m.btn)/2
@@ -741,10 +755,11 @@ func (a *app) layout() {
 	mv(idConvert, x1-qw-8-cvw, by, cvw, m.btn)
 	mv(idOpen, x1-qw-8-cvw-8-ow, by, ow, m.btn)
 	sigW := a.measure(a.fontSmall, appSignature)
-	dw := max(110, tw("btn.donate")+32)
-	mv(idDonate, x0+sigW+14, by, dw, m.btn)
-	sw := max(110, tw("btn.suggest")+32)
-	mv(idSuggest, x0+sigW+14+dw+8, by, sw, m.btn)
+	// don et suggestion : liens discrets (style « lien » de l'Analyseur), toujours accessibles
+	dw := tw("btn.donate") + 20
+	mv(idDonate, x0+sigW+10, by, dw, m.btn)
+	sw := tw("btn.suggest") + 20
+	mv(idSuggest, x0+sigW+10+dw+4, by, sw, m.btn)
 	a.footerRight = x0 + sigW + 4
 }
 
@@ -797,6 +812,7 @@ func (a *app) paintHeader(hdc uintptr, width int32, hdr, logo int, title, sub st
 	fillBox(hdc, width*6/10, 0, width, H, colFond)
 	fillBox(hdc, 0, H, width, H+int32(a.s(3)), colAccent)
 	tx := a.logoTitleX(hdc, 22, hdr/2, logo)
+	defer func() { a.titleLeft = tx }()
 	if tx == 22 && a.icoBig != 0 { // repli sur l'icône si le logo ne peut pas être dessiné
 		d := hdr - 20
 		pDrawIconEx.Call(hdc, uintptr(a.s(22)), uintptr(a.s(10)), a.icoBig, uintptr(a.s(d)), uintptr(a.s(d)), 0, 0, 3)
@@ -821,8 +837,8 @@ func (a *app) paint(hdc uintptr) {
 	a.paintHeader(hdc, rc.r, m.hdr, m.logo, T("hdr.title"), T("hdr.sub"), a.titleRight)
 
 	// étapes : panneau arrondi, numéro dans un rond bleu, titre blanc, filet
-	x0, x1 := 20, cliW-20
 	for _, c := range a.cards {
+		x0, x1 := c.x0, c.x1
 		roundBox(hdc, a.px(rect{int32(x0), int32(c.y), int32(x1), int32(c.y + c.h)}), int32(a.s(12)), colPanneau, colFilet)
 		ty := c.y + m.pad
 		d := 22
@@ -837,14 +853,11 @@ func (a *app) paint(hdc uintptr) {
 		}
 	}
 
-	// champs de saisie : bord bleu quand ils ont le focus
+	// champs de saisie : contour visible (3:1 au moins), bleu et épais avec le focus,
+	// fond plus sombre quand le champ est verrouillé (conversion en cours)
 	focus, _, _ := pGetFocus.Call()
 	for id, f := range a.frames {
-		bd := colFilet
-		if focus == a.ctl[id] {
-			bd = colAccent
-		}
-		roundBox(hdc, f, int32(a.s(8)), colPanneau, bd)
+		a.paintField(hdc, f, focus == a.ctl[id], isEnabled(a.ctl[id]))
 	}
 
 	// progression : seulement la valeur transmise par la conversion
@@ -862,6 +875,7 @@ func (a *app) paint(hdc uintptr) {
 	// journal
 	roundBox(hdc, a.px(a.logRc), int32(a.s(10)), colPanneau, colFilet)
 
+	x0 := 20
 	// pied de page
 	fy := int32(a.s(a.footY))
 	fillBox(hdc, 0, fy, rc.r, rc.b, colPanneau)
@@ -890,9 +904,13 @@ func (a *app) onNotify(lParam uintptr) (uintptr, bool) {
 	}
 	switch id {
 	case idRecursive, idAir, idTop:
-		a.drawCheck(nm, back)
+		a.drawCheck(nm, back, id == idAir)
+	case idConvert:
+		a.drawButton(nm, btnPrimary, back)
+	case idDonate, idSuggest:
+		a.drawButton(nm, btnLink, back)
 	default:
-		a.drawButton(nm, id == idConvert, back)
+		a.drawButton(nm, btnNormal, back)
 	}
 	return cdrfSkipDef, true
 }
@@ -906,8 +924,10 @@ func (a *app) onCtlColor(msg uint32, hdc, h uintptr) uintptr {
 		return brFond
 	case h == a.ctl[idDatInfo]:
 		pSetTextColor.Call(hdc, colDiscret)
-	case msg == wmCtlColorStatic && !isEnabled(h):
+	case msg == wmCtlColorStatic && !isEnabled(h): // champ verrouillé : valeur lisible, fond plus sombre
 		pSetTextColor.Call(hdc, colInactif)
+		pSetBkColor.Call(hdc, colFond)
+		return brFond
 	case h == a.ctl[idLblMachine] || h == a.ctl[idLblFolder] || h == a.ctl[idLblSort] || h == a.ctl[idLblLaser]:
 		pSetTextColor.Call(hdc, colDiscret)
 	default:
@@ -1049,6 +1069,9 @@ func (a *app) loadBackup(path string) {
 	a.log(Tf("log.backupLoaded", len(ms)))
 }
 
+// lockedIDs : options, langue et machine figées pendant la conversion.
+var lockedIDs = []int{idConvert, idDatBrowse, idBkBrowse, idOpen, idDatEdit, idBkEdit, idRecursive, idMachine, idFolderName, idSort, idTop, idLaser, idLang}
+
 func (a *app) convert() {
 	if a.busy {
 		return
@@ -1097,8 +1120,9 @@ func (a *app) convert() {
 		fid, _ := FindJobFolder(db, folder, o.Machine.ID)
 		db.Close()
 		if fid != 0 {
-			if msgBox(a.hwnd, Tf("ask.replace", folder),
-				T("msg.title"), mbYesNo|mbIconWarning) != idYes {
+			// actions explicites ; focus initial et Entrée sur « Annuler » (non destructif)
+			if msgChoice(a.hwnd, Tf("ask.replace", folder), T("msg.title"), mbIconWarning,
+				"btn.replace", "btn.cancel", false) != idYes {
 				return
 			}
 			o.ReplaceFolder = true
@@ -1107,7 +1131,7 @@ func (a *app) convert() {
 
 	a.busy = true
 	// options, langue et machine figées pendant la conversion
-	locked := []int{idConvert, idDatBrowse, idBkBrowse, idOpen, idDatEdit, idBkEdit, idRecursive, idMachine, idFolderName, idSort, idTop, idLaser, idLang}
+	locked := lockedIDs
 	for _, id := range locked {
 		enable(a.ctl[id], false)
 	}
@@ -1153,15 +1177,22 @@ func (a *app) convert() {
 	a.log(T("log.outDir") + out)
 	done := Tf("msg.done", len(res.Converted), folder)
 	if n := res.Noted(); n > 0 || len(res.Skipped) > 0 {
-		// bilan inséré avant la question finale (« Ouvrir le dossier maintenant ? »)
-		sum := Tf("msg.summary", len(res.Converted)-n, n, len(res.Skipped))
-		if i := strings.LastIndex(done, "\n\n"); i >= 0 {
-			done = done[:i] + sum + done[i:]
-		}
+		done = withSummary(done, Tf("msg.summary", len(res.Converted)-n, n, len(res.Skipped)))
 	}
-	if msgBox(a.hwnd, done, T("msg.title"), mbYesNo|mbIconInfo) == idYes {
+	if msgChoice(a.hwnd, done, T("msg.title"), mbIconInfo, "btn.open", "btn.close", true) == idYes {
 		a.openOut()
 	}
+}
+
+// withSummary : message de fin dans l'ordre résultat, bilan, consignes, question.
+// Le bilan (qui commence par une ligne vide) suit les deux premiers paragraphes
+// (« Conversion terminée ! » et le nombre de réglages ajoutés).
+func withSummary(done, sum string) string {
+	parts := strings.Split(done, "\n\n")
+	if len(parts) < 3 {
+		return done + sum
+	}
+	return strings.Join(parts[:2], "\n\n") + sum + "\n\n" + strings.Join(parts[2:], "\n\n")
 }
 
 func (a *app) openOut() {

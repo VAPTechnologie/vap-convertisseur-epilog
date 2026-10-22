@@ -58,7 +58,7 @@ func richOK() bool { return msftedit.Load() == nil }
 // newLog : crée le journal (RichEdit si possible) ; renvoie vrai s'il est en couleurs.
 func (a *app) newLog() bool {
 	if richOK() {
-		a.child(richEditClass, "", esMultiline|esReadOnly|esAutoVScroll|wsVScroll, 0, 0, 0, 10, 10, idLog)
+		a.child(richEditClass, "", esMultiline|esReadOnly|esAutoVScroll|wsVScroll|esDisableNoScrl, 0, 0, 0, 10, 10, idLog)
 		if h := a.ctl[idLog]; h != 0 {
 			send(h, emSetBkgndColor, 0, colPanneau)
 			darkScrollbars(h)
