@@ -42,6 +42,11 @@ func msgBox(owner uintptr, text, title string, flags uintptr) int {
 	if owner == 0 {
 		return nativeBox(owner, text, title, flags)
 	}
+	if owner == A.hwnd && helpHwnd != 0 {
+		// notice ouverte (pendant une conversion) : elle devient propriétaire, pour que
+		// sa fermeture ne puisse pas réactiver la fenêtre principale sous le message
+		owner = helpHwnd
+	}
 	mb.text, mb.title, mb.flags = text, title, flags
 	// modèle minimal : WS_POPUP | WS_CAPTION | WS_SYSMENU | DS_MODALFRAME, aucun contrôle (créés à l'ouverture)
 	tpl := make([]uint16, 16)
