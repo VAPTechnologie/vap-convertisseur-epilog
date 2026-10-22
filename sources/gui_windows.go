@@ -273,10 +273,6 @@ func enable(h uintptr, on bool) {
 	pEnableWindow.Call(h, v)
 }
 
-func msgBox(owner uintptr, text, title string, flags uintptr) int {
-	r, _, _ := pMessageBoxW.Call(owner, wp(text), wp(title), flags)
-	return int(r)
-}
 
 // ---------------------------------------------------------------------------
 // Boîtes de dialogue modernes (IFileOpenDialog)
@@ -377,45 +373,84 @@ type app struct {
 	hInst, hwnd                          uintptr
 	dpi                                  int
 	fontUI, fontBold, fontTitle, fontSub uintptr
-	fontSmall                            uintptr
-	brBody, brWhite, brHeader, brAccent  uintptr
+	fontSmall, fontSection, fontIcon     uintptr
 	icoBig                               uintptr
 	ctl                                  map[int]uintptr
 	machines                             []Machine
 	outDir                               string
 	report                               string // dernier rapport d'erreur écrit
-	busy                               bool
-	sections                             []section
+	busy                                 bool
+	cards                                []card
 	titleRight, footerRight              int  // limites des textes dessinés (unités logiques)
+	titleLeft                            int  // début du titre du dernier bandeau dessiné (contrôle des débordements)
 	inWelcome, welcomeOnly               bool // journal = seulement le message d'accueil
 	newRelease                           release // version plus récente trouvée sur GitHub
+	compact                              bool    // petit écran : en-tête et marges réduits
+	cliH                                 int     // hauteur de la zone cliente (unités logiques)
+	frames                               map[int]rect // cadres des champs de saisie (pixels)
+	progRc, logRc                        rect         // barre de progression et journal (unités logiques)
+	footY                                int          // haut du pied de page (unités logiques)
+	progress                             int          // 0 à 100
+	richLog                              bool         // journal en couleurs (RichEdit)
+	logBar                               uintptr      // barre de défilement VAP du journal
+	realDpi                              int          // DPI réel du système (texte des RichEdit, en points)
+	logBuf                               strings.Builder
 }
 
-type section struct {
-	y     int
-	num   string
-	title string
+// card : panneau arrondi d'une étape (unités logiques).
+type card struct {
+	x0, x1, y, h int
+	num          string
+	title        string
 }
 
-var A = &app{ctl: map[int]uintptr{}}
+var A = &app{ctl: map[int]uintptr{}, frames: map[int]rect{}}
 
-const (
-	cliW    = 860
-	cliH    = 660
-	headerH = 92
-)
+const cliW = 860
+
+// metrics : dimensions de la fenêtre principale (unités logiques), normales ou compactes
+// (écran 1366 × 768, mise à l'échelle 125 % ou 150 %).
+// En mode compact, les étapes 1 et 2 sont côte à côte : le journal garde de la hauteur
+// sans réduire la taille des textes.
+type metrics struct {
+	hdr, top, pad, title, gap, row, chk, cardGap, prog, foot, btn, logo, logMin, logDesign int
+	side                                                                                   bool
+}
 
 var (
-	colBody    = rgb(244, 246, 250)
-	colHeader  = rgb(14, 22, 36)
-	colAccent  = rgb(30, 140, 255)
-	colTitle   = rgb(255, 255, 255)
-	colSub     = rgb(150, 190, 240)
-	colSection = rgb(14, 40, 80)
-	colText    = rgb(45, 52, 64)
-	colMuted   = rgb(120, 128, 140)
-	colLine    = rgb(214, 220, 230)
+	normalM  = metrics{hdr: 66, top: 12, pad: 10, title: 24, gap: 7, row: 30, chk: 24, cardGap: 8, prog: 8, foot: 54, btn: 34, logo: 26, logMin: 110, logDesign: 200}
+	compactM = metrics{hdr: 48, top: 6, pad: 7, title: 22, gap: 5, row: 28, chk: 22, cardGap: 6, prog: 6, foot: 46, btn: 30, logo: 21, logMin: 84, logDesign: 160, side: true}
 )
+
+func (a *app) m() metrics {
+	if a.compact {
+		return compactM
+	}
+	return normalM
+}
+
+// hauteurs des quatre panneaux
+func (m metrics) cards() [4]int {
+	two := m.pad*2 + m.title + m.gap + m.row
+	return [4]int{two + m.gap + m.chk, two, two, two + m.gap + m.row}
+}
+
+// space : espace autour de la progression et du journal.
+func (m metrics) space() int { return min(10, m.pad+4) }
+
+// cardsHeight : hauteur occupée par les quatre étapes.
+func (m metrics) cardsHeight() int {
+	c := m.cards()
+	if m.side {
+		return max(c[0], c[1]) + c[2] + c[3] + 2*m.cardGap
+	}
+	return c[0] + c[1] + c[2] + c[3] + 3*m.cardGap
+}
+
+// clientHeight : hauteur totale pour un journal de hauteur log.
+func (m metrics) clientHeight(log int) int {
+	return m.hdr + 3 + m.top + m.cardsHeight() + m.space() + m.prog + m.space() + log + m.space() + m.foot
+}
 
 func (a *app) s(v int) int { return v * a.dpi / 96 }
 
@@ -444,30 +479,31 @@ func (a *app) label(id int, style uint32) uintptr {
 
 // buildUI : crée les contrôles ; textes et positions sont posés par applyLanguage / layout.
 func (a *app) buildUI() {
+	const combo = cbsDropDownList | cbsOwnerDrawFixed | cbsHasStrings | wsVScroll | wsTabStop
 	a.child("BUTTON", "", bsPushButton|wsTabStop, 0, 0, 0, 10, 10, idHelp)
-	// liste des langues dessinée par le programme, avec le drapeau du pays (flags_windows.go)
-	a.child("COMBOBOX", "", cbsDropDownList|cbsOwnerDrawFixed|cbsHasStrings|wsVScroll|wsTabStop, 0, 0, 0, 10, 300, idLang)
+	// liste des langues avec le drapeau du pays (flags_windows.go)
+	a.child("COMBOBOX", "", combo, 0, 0, 0, 10, 300, idLang)
 	for i := Lang(0); i < nLang; i++ {
 		send(a.ctl[idLang], cbAddString, 0, wp(langNames[i]))
 	}
-	a.child("EDIT", "", esAutoHScroll|wsTabStop, wsExClientEdge, 0, 0, 10, 10, idDatEdit)
+	a.child("EDIT", "", esAutoHScroll|wsTabStop, 0, 0, 0, 10, 10, idDatEdit)
 	a.child("BUTTON", "", bsPushButton|wsTabStop, 0, 0, 0, 10, 10, idDatBrowse)
 	a.child("BUTTON", "", bsAutoCheckbox|wsTabStop, 0, 0, 0, 10, 10, idRecursive)
 	a.child("STATIC", "", ssRight|ssEndEllip|ssCenterImg, 0, 0, 0, 10, 10, idDatInfo)
-	a.child("EDIT", "", esAutoHScroll|wsTabStop, wsExClientEdge, 0, 0, 10, 10, idBkEdit)
+	a.child("EDIT", "", esAutoHScroll|wsTabStop, 0, 0, 0, 10, 10, idBkEdit)
 	a.child("BUTTON", "", bsPushButton|wsTabStop, 0, 0, 0, 10, 10, idBkBrowse)
 	a.label(idLblMachine, ssLeft)
-	a.child("COMBOBOX", "", cbsDropDownList|wsVScroll|wsTabStop, 0, 0, 0, 10, 300, idMachine)
+	a.child("COMBOBOX", "", combo, 0, 0, 0, 10, 300, idMachine)
 	a.label(idLblFolder, ssLeft)
-	a.child("EDIT", "", esAutoHScroll|wsTabStop, wsExClientEdge, 0, 0, 10, 10, idFolderName)
+	a.child("EDIT", "", esAutoHScroll|wsTabStop, 0, 0, 0, 10, 10, idFolderName)
 	a.child("BUTTON", "", bsAutoCheckbox|bsMultiline|wsTabStop, 0, 0, 0, 10, 10, idAir)
 	a.label(idLblSort, ssLeft)
-	a.child("COMBOBOX", "", cbsDropDownList|wsVScroll|wsTabStop, 0, 0, 0, 10, 200, idSort)
+	a.child("COMBOBOX", "", combo, 0, 0, 0, 10, 200, idSort)
 	a.child("BUTTON", "", bsAutoCheckbox|bsMultiline|wsTabStop, 0, 0, 0, 10, 10, idTop)
 	a.label(idLblLaser, ssLeft)
-	a.child("COMBOBOX", "", cbsDropDownList|wsVScroll|wsTabStop, 0, 0, 0, 10, 200, idLaser)
-	a.child("msctls_progress32", "", 0, 0, 0, 0, 10, 10, idProgress)
-	a.child("EDIT", "", esMultiline|esReadOnly|esAutoVScroll|wsVScroll, wsExClientEdge, 0, 0, 10, 10, idLog)
+	a.child("COMBOBOX", "", combo, 0, 0, 0, 10, 200, idLaser)
+	a.richLog = a.newLog()
+	a.logBar = a.newScrollBar(a.hwnd, a.ctl[idLog])
 	a.child("BUTTON", "", bsPushButton|wsTabStop, 0, 0, 0, 10, 10, idOpen)
 	a.child("BUTTON", "", bsDefPushButton|wsTabStop, 0, 0, 0, 10, 10, idConvert)
 	a.child("BUTTON", "", bsPushButton|wsTabStop, 0, 0, 0, 10, 10, idQuit)
@@ -475,12 +511,17 @@ func (a *app) buildUI() {
 	a.child("BUTTON", "", bsPushButton|wsTabStop, 0, 0, 0, 10, 10, idSuggest)
 	a.child("STATIC", "", ssLeft|ssNotify|ssEndEllip|ssCenterImg, 0, 0, 0, 10, 10, idUpdate)
 	enable(a.ctl[idOpen], false)
+	a.themeCombo(a.ctl[idLang], colFond)
+	for _, id := range []int{idDatEdit, idBkEdit, idFolderName} {
+		a.themeEdit(a.ctl[id])
+	}
+	for _, id := range []int{idMachine, idSort, idLaser} {
+		a.themeCombo(a.ctl[id], colPanneau)
+	}
 
 	send(a.ctl[idAir], bmSetCheck, 1, 0)
 	enable(a.ctl[idAir], false) // imposée par le moteur, affichée pour information
 	send(a.ctl[idTop], bmSetCheck, 1, 0)
-	send(a.ctl[idProgress], pbmSetRange32, 0, 100)
-	send(a.ctl[idProgress], pbmSetBarColor, 0, colAccent)
 
 	a.applyLanguage(true)
 }
@@ -520,7 +561,7 @@ func (a *app) applyLanguage(first bool) {
 }
 
 func (a *app) showWelcome() {
-	setText(a.ctl[idLog], "")
+	a.clearLog()
 	a.inWelcome = true
 	for i := 0; i <= 5; i++ {
 		a.log(T(fmt.Sprintf("welcome.%d", i)))
@@ -533,30 +574,46 @@ func (a *app) showWelcome() {
 	send(a.ctl[idLog], 0x0115, 6, 0) // WM_VSCROLL SB_TOP
 }
 
-// makeFonts : polices adaptées à la langue (Segoe UI n'a pas les caractères chinois / japonais).
-func (a *app) makeFonts() {
-	old := []uintptr{a.fontUI, a.fontSmall, a.fontBold, a.fontTitle, a.fontSub}
-	face, bold, bw := "Segoe UI", "Segoe UI Semibold", 600
+// uiFaces : polices adaptées à la langue (Segoe UI n'a pas les caractères chinois / japonais).
+func uiFaces() (face, bold string, bw int) {
 	switch cur {
 	case LZH:
-		face, bold, bw = "Microsoft YaHei UI", "Microsoft YaHei UI", 700
+		return "Microsoft YaHei UI", "Microsoft YaHei UI", 700
 	case LJA:
-		face, bold, bw = "Yu Gothic UI", "Yu Gothic UI Semibold", 600
+		return "Yu Gothic UI", "Yu Gothic UI Semibold", 600
+	}
+	return "Segoe UI", "Segoe UI Semibold", 600
+}
+
+// makeFonts : polices de l'interface ; titres en Bahnschrift comme l'Analyseur Wi-Fi.
+func (a *app) makeFonts() {
+	old := []uintptr{a.fontUI, a.fontSmall, a.fontBold, a.fontTitle, a.fontSub, a.fontSection, a.fontIcon}
+	face, bold, bw := uiFaces()
+	display, dw := "Bahnschrift", 600
+	if cur == LZH || cur == LJA {
+		display, dw = bold, bw
+	}
+	titlePt, secPt := 17, 12
+	if a.compact {
+		titlePt, secPt = 15, 11
 	}
 	a.fontUI = a.font(10, 400, face)
 	a.fontSmall = a.font(9, 400, face)
 	a.fontBold = a.font(10, bw, bold)
-	a.fontTitle = a.font(18, bw, bold)
+	a.fontTitle = a.font(titlePt, dw, display)
+	a.fontSection = a.font(secPt, dw, display)
 	a.fontSub = a.font(10, 400, face)
-	for _, h := range a.ctl {
-		send(h, wmSetFont, a.fontUI, 1)
+	a.fontIcon = a.font(15, 700, "Segoe UI")
+	for id, h := range a.ctl {
+		if id != idLog {
+			send(h, wmSetFont, a.fontUI, 1)
+		}
 	}
-	send(a.ctl[idLog], wmSetFont, a.fontSmall, 1)
+	a.logFont(face, 9)
 	send(a.ctl[idConvert], wmSetFont, a.fontBold, 1)
-	del := gdi32.NewProc("DeleteObject")
 	for _, f := range old {
 		if f != 0 {
-			del.Call(f)
+			pDeleteObject.Call(f)
 		}
 	}
 }
@@ -572,178 +629,315 @@ func (a *app) measure(font uintptr, s string) int {
 	return int(r.r)*96/a.dpi + 1
 }
 
+// px : rectangle logique -> pixels.
+func (a *app) px(r rect) rect {
+	return rect{int32(a.s(int(r.l))), int32(a.s(int(r.t))), int32(a.s(int(r.r))), int32(a.s(int(r.b)))}
+}
+
 // layout : place les contrôles en fonction de la longueur des textes de la langue.
 func (a *app) layout() {
-	m := 26
-	right := cliW - m
+	m := a.m()
+	x0, x1 := 20, cliW-20 // bords des panneaux
+	ix0, ix1 := x0+16, x1-16
 	mv := func(id, x, y, w, h int) {
 		pMoveWindow.Call(a.ctl[id], uintptr(a.s(x)), uintptr(a.s(y)), uintptr(a.s(w)), uintptr(a.s(h)), 1)
 	}
+	eh := int(textHeight(a.hwnd, a.fontUI)) + a.s(2)
+	// champ de saisie : cadre arrondi dessiné par la fenêtre, texte centré dedans
+	field := func(id, x, y, w, h int) {
+		f := a.px(rect{int32(x), int32(y), int32(x + w), int32(y + h)})
+		a.frames[id] = f
+		pMoveWindow.Call(a.ctl[id], uintptr(f.l+int32(a.s(10))), uintptr(f.t+(f.b-f.t-int32(eh))/2),
+			uintptr(f.r-f.l-int32(a.s(20))), uintptr(eh), 1)
+	}
+	// liste déroulante : hauteur de la partie fermée = hauteur du champ
+	combo := func(id, x, y, w, h, list int) {
+		send(a.ctl[id], cbSetItemH, ^uintptr(0), uintptr(a.s(h)-6))
+		send(a.ctl[id], cbSetItemH, 0, uintptr(a.s(24)))
+		mv(id, x, y, w, list)
+	}
 	tw := func(k string) int { return a.measure(a.fontUI, T(k)) }
 
-	// en-tête : notice + langue
+	// en-tête : notice + langue, à droite
+	lw := 0
+	for _, n := range langNames {
+		lw = max(lw, a.measure(a.fontUI, n))
+	}
+	lw += 10 + 20 + 8 + 10 + 10 + 16 // marges, drapeau, chevron et une petite réserve
 	hw := max(150, tw("btn.help")+36)
-	mv(idHelp, right-hw, 12, hw, 32)
-	mv(idLang, right-hw, 52, hw, 300)
-	a.titleRight = right - hw - 16
+	hy := (m.hdr - m.btn) / 2
+	combo(idLang, x1-lw, hy, lw, m.btn, 300)
+	mv(idHelp, x1-lw-8-hw, hy, hw, m.btn)
+	a.titleRight = x1 - lw - 8 - hw - 16
 
-	a.sections = a.sections[:0]
-	y := headerH + 22
+	a.cards = a.cards[:0]
+	ch := m.cards()
+	y := m.hdr + 3 + m.top
+	bw := max(110, tw("btn.browse")+28)
 
-	a.sections = append(a.sections, section{y, "1", T("sec1")})
-	y += 30
-	bw := max(118, tw("btn.browse")+32)
-	mv(idDatEdit, m, y, right-m-bw-10, 27)
-	mv(idDatBrowse, right-bw, y-1, bw, 29)
-	y += 34
+	// 1 : dossier des .DAT ; 2 : sauvegarde .epidb (côte à côte en mode compact)
+	c1x1, c2x0, c2y := x1, x0, y+ch[0]+m.cardGap
+	if m.side {
+		c1x1, c2x0, c2y = (x0+x1)/2-m.cardGap/2, (x0+x1)/2+m.cardGap/2, y
+	}
+	a.cards = append(a.cards, card{x0, c1x1, y, ch[0], "1", T("sec1")})
+	in0, in1 := x0+16, c1x1-16
+	ry := y + m.pad + m.title + m.gap
+	field(idDatEdit, in0, ry, in1-in0-bw-10, m.row)
+	mv(idDatBrowse, in1-bw, ry, bw, m.row)
+	ry += m.row + m.gap
 	cw := tw("chk.recursive") + 30
-	mv(idRecursive, m+2, y, cw, 22)
-	mv(idDatInfo, m+2+cw+10, y, right-(m+2+cw+10), 22)
-	y += 40
+	mv(idRecursive, in0, ry, cw, m.chk)
+	mv(idDatInfo, in0+cw+10, ry, in1-(in0+cw+10), m.chk)
 
-	a.sections = append(a.sections, section{y, "2", T("sec2")})
-	y += 30
-	mv(idBkEdit, m, y, right-m-bw-10, 27)
-	mv(idBkBrowse, right-bw, y-1, bw, 29)
-	y += 46
+	h2 := ch[1]
+	if m.side {
+		h2 = ch[0] // même hauteur que le panneau voisin
+	}
+	a.cards = append(a.cards, card{c2x0, x1, c2y, h2, "2", T("sec2")})
+	in0, in1 = c2x0+16, x1-16
+	ry = c2y + m.pad + m.title + m.gap
+	field(idBkEdit, in0, ry, in1-in0-bw-10, m.row)
+	mv(idBkBrowse, in1-bw, ry, bw, m.row)
+	y = c2y + h2 + m.cardGap
 
-	a.sections = append(a.sections, section{y, "3", T("sec3")})
-	y += 30
+	// 3 : machine et nom du dossier
+	a.cards = append(a.cards, card{x0, x1, y, ch[2], "3", T("sec3")})
+	ry = y + m.pad + m.title + m.gap
 	w1 := tw("lbl.machine") + 10
 	w2 := tw("lbl.folder") + 10
 	comboW := 270
-	if free := (right - m) - w1 - 18 - w2 - 160; free < comboW {
+	if free := (ix1 - ix0) - w1 - 18 - w2 - 160; free < comboW {
 		comboW = max(free, 160)
 	}
-	mv(idLblMachine, m, y, w1, 26)
-	mv(idMachine, m+w1, y, comboW, 300)
-	x := m + w1 + comboW + 18
-	mv(idLblFolder, x, y, w2, 26)
-	mv(idFolderName, x+w2, y, right-x-w2, 27)
-	y += 46
+	mv(idLblMachine, ix0, ry, w1, m.row)
+	combo(idMachine, ix0+w1, ry, comboW, m.row, 300)
+	x := ix0 + w1 + comboW + 18
+	mv(idLblFolder, x, ry, w2, m.row)
+	field(idFolderName, x+w2, ry, ix1-x-w2, m.row)
+	y += ch[2] + m.cardGap
 
-	a.sections = append(a.sections, section{y, "4", T("sec4")})
-	y += 30
+	// 4 : options
+	a.cards = append(a.cards, card{x0, x1, y, ch[3], "4", T("sec4")})
+	ry = y + m.pad + m.title + m.gap
 	cbw := 150
 	for _, k := range []string{"sort.none", "sort.inout", "sort.opt", "sort.dat", "laser.co2", "laser.fiber"} {
-		cbw = max(cbw, tw(k)+40)
+		cbw = max(cbw, tw(k)+46)
 	}
-	lw := max(tw("lbl.sort"), tw("lbl.laser")) + 12
-	gx := right - cbw - lw
-	chkW := gx - 12 - (m + 2)
-	mv(idAir, m+2, y-3, chkW, 30)
-	mv(idLblSort, gx, y, lw, 26)
-	mv(idSort, gx+lw, y, cbw, 200)
-	y += 34
-	mv(idTop, m+2, y-3, chkW, 30)
-	mv(idLblLaser, gx, y, lw, 26)
-	mv(idLaser, gx+lw, y, cbw, 200)
-	y += 42
+	lw2 := max(tw("lbl.sort"), tw("lbl.laser")) + 12
+	gx := ix1 - cbw - lw2
+	chkW := gx - 16 - ix0
+	mv(idAir, ix0, ry, chkW, m.row)
+	mv(idLblSort, gx, ry, lw2, m.row)
+	combo(idSort, gx+lw2, ry, cbw, m.row, 200)
+	ry += m.row + m.gap
+	mv(idTop, ix0, ry, chkW, m.row)
+	mv(idLblLaser, gx, ry, lw2, m.row)
+	combo(idLaser, gx+lw2, ry, cbw, m.row, 200)
+	y += ch[3] + m.space()
 
-	mv(idProgress, m, y, right-m, 10)
-	y += 18
-	// lien « nouvelle version » sous le journal, au-dessus de « VAP V1.8 »
-	logB := cliH - 66
+	// progression, journal, lien « nouvelle version »
+	a.progRc = rect{int32(x0), int32(y), int32(x1), int32(y + m.prog)}
+	y += m.prog + m.space()
+	a.footY = a.cliH - m.foot
+	logB := a.footY - m.space()
 	if a.newRelease.tag != "" {
 		logB -= 22
-		mv(idUpdate, m, logB+4, min(right-m, a.measure(a.fontUI, Tf("upd.link", a.newRelease.tag))+4), 22)
+		mv(idUpdate, x0+4, logB+3, min(x1-x0-4, a.measure(a.fontUI, Tf("upd.link", a.newRelease.tag))+4), 20)
 	}
-	mv(idLog, m, y, right-m, logB-y)
+	a.logRc = rect{int32(x0), int32(y), int32(x1), int32(logB)}
+	vm := min(6, m.pad-2) // marge haute et basse du texte
+	a.placeScroll(a.ctl[idLog], a.logBar, a.px(rect{int32(x0 + 12), int32(y + vm), int32(x1 - 6), int32(logB - vm)}))
 
-	by := cliH - 50
+	// pied de page : signature, don, suggestion | ouvrir, convertir, quitter
+	by := a.footY + (m.foot-m.btn)/2
 	qw := max(110, tw("btn.quit")+36)
 	cvw := max(150, a.measure(a.fontBold, T("btn.convert"))+36)
 	ow := max(150, tw("btn.open")+36)
-	mv(idQuit, right-qw, by, qw, 34)
-	mv(idConvert, right-qw-12-cvw, by, cvw, 34)
-	mv(idOpen, right-qw-12-cvw-12-ow, by, ow, 34)
-	// bouton de don juste après « VAP V1.8 », en bas à gauche
+	mv(idQuit, x1-qw, by, qw, m.btn)
+	mv(idConvert, x1-qw-8-cvw, by, cvw, m.btn)
+	mv(idOpen, x1-qw-8-cvw-8-ow, by, ow, m.btn)
 	sigW := a.measure(a.fontSmall, appSignature)
-	dw := max(110, tw("btn.donate")+32)
-	mv(idDonate, m+sigW+14, by, dw, 34)
-	sw := max(110, tw("btn.suggest")+32)
-	mv(idSuggest, m+sigW+14+dw+8, by, sw, 34)
-	a.footerRight = m + sigW + 4
-}
-
-func (a *app) log(s string) {
-	h := a.ctl[idLog]
-	n, _, _ := pGetWindowTextLengthW.Call(h)
-	send(h, emSetSel, n, n)
-	prefix := "\r\n"
-	if n == 0 {
-		prefix = ""
-	}
-	send(h, emReplaceSel, 0, wp(prefix+s))
-	pUpdateWindow.Call(h)
-	if !a.inWelcome {
-		a.welcomeOnly = false
-	}
+	// don et suggestion : liens discrets (style « lien » de l'Analyseur), toujours accessibles
+	dw := tw("btn.donate") + 20
+	mv(idDonate, x0+sigW+10, by, dw, m.btn)
+	sw := tw("btn.suggest") + 20
+	mv(idSuggest, x0+sigW+10+dw+4, by, sw, m.btn)
+	a.footerRight = x0 + sigW + 4
 }
 
 func (a *app) checked(id int) bool { return send(a.ctl[id], bmGetCheck, 0, 0) == 1 }
 
-func (a *app) paint(hdc uintptr) {
-	var rc rect
-	pGetClientRect.Call(a.hwnd, uintptr(unsafe.Pointer(&rc)))
-	hdr := rect{0, 0, rc.r, int32(a.s(headerH))}
-	pFillRect.Call(hdc, uintptr(unsafe.Pointer(&hdr)), a.brHeader)
-	acc := rect{0, int32(a.s(headerH)), rc.r, int32(a.s(headerH + 4))}
-	pFillRect.Call(hdc, uintptr(unsafe.Pointer(&acc)), a.brAccent)
-	// logo VAP + trait, puis le titre (repli sur l'icône si le logo ne peut pas être dessiné)
-	tx := a.logoTitleX(hdc, 24, 46, 27)
-	if tx == 24 && a.icoBig != 0 {
-		pDrawIconEx.Call(hdc, uintptr(a.s(24)), uintptr(a.s(16)), a.icoBig, uintptr(a.s(60)), uintptr(a.s(60)), 0, 0, 3)
-		tx = 100
-	}
-	pSetBkMode.Call(hdc, 1)
-	old, _, _ := pSelectObject.Call(hdc, a.fontTitle)
-	pSetTextColor.Call(hdc, colTitle)
-	t := rect{int32(a.s(tx)), int32(a.s(16)), int32(a.s(a.titleRight)), int32(a.s(52))}
-	pDrawTextW.Call(hdc, wp(T("hdr.title")), ^uintptr(0), uintptr(unsafe.Pointer(&t)), dtLeft|dtVCenter|dtSingleLine|dtNoPrefix|dtEndEllip)
-	pSelectObject.Call(hdc, a.fontSub)
-	pSetTextColor.Call(hdc, colSub)
-	t = rect{int32(a.s(tx + 1)), int32(a.s(52)), int32(a.s(a.titleRight)), int32(a.s(76))}
-	pDrawTextW.Call(hdc, wp(T("hdr.sub")), ^uintptr(0), uintptr(unsafe.Pointer(&t)), dtLeft|dtVCenter|dtSingleLine|dtNoPrefix|dtEndEllip)
-
-	// sections
-	nullPen, _, _ := pGetStockObject.Call(8)
-	linePen, _, _ := pCreatePen.Call(0, uintptr(a.s(1)), colLine)
-	for _, s := range a.sections {
-		y := a.s(s.y)
-		pSelectObject.Call(hdc, nullPen)
-		ob, _, _ := pSelectObject.Call(hdc, a.brAccent)
-		d := a.s(22)
-		pEllipse.Call(hdc, uintptr(a.s(26)), uintptr(y), uintptr(a.s(26)+d), uintptr(y+d))
-		pSelectObject.Call(hdc, ob)
-		pSelectObject.Call(hdc, a.fontBold)
-		pSetTextColor.Call(hdc, colTitle)
-		c := rect{int32(a.s(26)), int32(y), int32(a.s(26) + d), int32(y + d)}
-		pDrawTextW.Call(hdc, wp(s.num), ^uintptr(0), uintptr(unsafe.Pointer(&c)), 0x1|dtVCenter|dtSingleLine)
-		pSetTextColor.Call(hdc, colSection)
-		tr := rect{int32(a.s(58)), int32(y), int32(a.s(cliW - 26)), int32(y + d)}
-		pDrawTextW.Call(hdc, wp(s.title), ^uintptr(0), uintptr(unsafe.Pointer(&tr)), dtLeft|dtVCenter|dtSingleLine|dtNoPrefix)
-		// filet après le titre
-		pSelectObject.Call(hdc, linePen)
-		tw := a.s(66) + a.textWidth(hdc, s.title)
-		pMoveToEx.Call(hdc, uintptr(tw), uintptr(y+d/2), 0)
-		pLineTo.Call(hdc, uintptr(a.s(cliW-26)), uintptr(y+d/2))
-	}
-	pSelectObject.Call(hdc, nullPen)
-	syscall.SyscallN(gdi32.NewProc("DeleteObject").Addr(), linePen)
-
-	// pied de page
-	pSelectObject.Call(hdc, a.fontSmall)
-	pSetTextColor.Call(hdc, colMuted)
-	f := rect{int32(a.s(26)), int32(a.s(cliH - 50)), int32(a.s(a.footerRight)), int32(a.s(cliH - 16))}
-	pDrawTextW.Call(hdc, wp(appSignature), ^uintptr(0), uintptr(unsafe.Pointer(&f)), dtLeft|dtVCenter|dtSingleLine|dtNoPrefix|dtEndEllip)
-	pSelectObject.Call(hdc, old)
+// setProgress : barre de progression (valeur réelle du moteur, 0 à 100).
+func (a *app) setProgress(p int) {
+	a.progress = p
+	r := a.px(a.progRc)
+	pInvalidateRect.Call(a.hwnd, uintptr(unsafe.Pointer(&r)), 0)
+	pUpdateWindow.Call(a.hwnd)
 }
 
-func (a *app) textWidth(hdc uintptr, s string) int {
-	r := rect{0, 0, 2000, 100}
-	pDrawTextW.Call(hdc, wp(s), ^uintptr(0), uintptr(unsafe.Pointer(&r)), dtLeft|dtSingleLine|0x400) // DT_CALCRECT
-	return int(r.r)
+var (
+	pCreateCompatibleBitmap = gdi32.NewProc("CreateCompatibleBitmap")
+	pBitBlt                 = gdi32.NewProc("BitBlt")
+)
+
+// paintBuffered : dessin dans une image en mémoire, puis copie (pas de scintillement).
+func paintBuffered(hwnd uintptr, draw func(hdc uintptr)) {
+	var ps paintStruct
+	hdc, _, _ := pBeginPaint.Call(hwnd, uintptr(unsafe.Pointer(&ps)))
+	var rc rect
+	pGetClientRect.Call(hwnd, uintptr(unsafe.Pointer(&rc)))
+	mem, _, _ := pCreateCompatibleDC.Call(hdc)
+	bmp, _, _ := pCreateCompatibleBitmap.Call(hdc, uintptr(rc.r), uintptr(rc.b))
+	if mem == 0 || bmp == 0 {
+		draw(hdc)
+	} else {
+		ob, _, _ := pSelectObject.Call(mem, bmp)
+		draw(mem)
+		p := ps.rcPaint
+		pBitBlt.Call(hdc, uintptr(p.l), uintptr(p.t), uintptr(p.r-p.l), uintptr(p.b-p.t), mem, uintptr(p.l), uintptr(p.t), 0x00CC0020) // SRCCOPY
+		pSelectObject.Call(mem, ob)
+	}
+	if bmp != 0 {
+		pDeleteObject.Call(bmp)
+	}
+	if mem != 0 {
+		pDeleteDC.Call(mem)
+	}
+	pEndPaint.Call(hwnd, uintptr(unsafe.Pointer(&ps)))
+}
+
+// paintHeader : bandeau commun (fenêtre principale et notice) : dégradé bleu nuit comme
+// l'Analyseur Wi-Fi, logo VAP, titre, sous-titre éventuel, filet bleu de 3 px.
+func (a *app) paintHeader(hdc uintptr, width int32, hdr, logo int, title, sub string, titleRight int) {
+	H := int32(a.s(hdr))
+	hGradient(hdc, rect{0, 0, width * 6 / 10, H}, colEnteteDebut, colFond)
+	fillBox(hdc, width*6/10, 0, width, H, colFond)
+	fillBox(hdc, 0, H, width, H+int32(a.s(3)), colAccent)
+	tx := a.logoTitleX(hdc, 22, hdr/2, logo)
+	defer func() { a.titleLeft = tx }()
+	if tx == 22 && a.icoBig != 0 { // repli sur l'icône si le logo ne peut pas être dessiné
+		d := hdr - 20
+		pDrawIconEx.Call(hdc, uintptr(a.s(22)), uintptr(a.s(10)), a.icoBig, uintptr(a.s(d)), uintptr(a.s(d)), 0, 0, 3)
+		tx = 22 + d + 14
+	}
+	th := textHeight(a.hwnd, a.fontTitle)
+	if sub == "" {
+		drawText(hdc, title, rect{int32(a.s(tx)), 0, int32(a.s(titleRight)), H}, a.fontTitle, colTexte, dtLeft|dtVCenter|dtSingleLine|dtEndEllip)
+		return
+	}
+	sh := textHeight(a.hwnd, a.fontSub)
+	top := (H - th - sh) / 2
+	drawText(hdc, title, rect{int32(a.s(tx)), top, int32(a.s(titleRight)), top + th}, a.fontTitle, colTexte, dtLeft|dtVCenter|dtSingleLine|dtEndEllip)
+	drawText(hdc, sub, rect{int32(a.s(tx + 1)), top + th, int32(a.s(titleRight)), top + th + sh}, a.fontSub, colDiscret, dtLeft|dtVCenter|dtSingleLine|dtEndEllip)
+}
+
+func (a *app) paint(hdc uintptr) {
+	m := a.m()
+	var rc rect
+	pGetClientRect.Call(a.hwnd, uintptr(unsafe.Pointer(&rc)))
+	fillBox(hdc, 0, 0, rc.r, rc.b, colFond)
+	a.paintHeader(hdc, rc.r, m.hdr, m.logo, T("hdr.title"), T("hdr.sub"), a.titleRight)
+
+	// étapes : panneau arrondi, numéro dans un rond bleu, titre blanc, filet
+	for _, c := range a.cards {
+		x0, x1 := c.x0, c.x1
+		roundBox(hdc, a.px(rect{int32(x0), int32(c.y), int32(x1), int32(c.y + c.h)}), int32(a.s(12)), colPanneau, colFilet)
+		ty := c.y + m.pad
+		d := 22
+		cy := ty + m.title/2
+		disc(hdc, int32(a.s(x0+16+d/2)), int32(a.s(cy)), int32(a.s(d/2)), colAccent)
+		drawText(hdc, c.num, a.px(rect{int32(x0 + 16), int32(cy - d/2), int32(x0 + 16 + d), int32(cy + d/2)}), a.fontBold, colTexteAccent, dtCenter|dtVCenter|dtSingleLine)
+		tl := x0 + 16 + d + 10
+		drawText(hdc, c.title, a.px(rect{int32(tl), int32(ty), int32(x1 - 16), int32(ty + m.title)}), a.fontSection, colTexte, dtLeft|dtVCenter|dtSingleLine|dtEndEllip)
+		lx := tl + a.measure(a.fontSection, c.title) + 10
+		if lx < x1-16 {
+			fillBox(hdc, int32(a.s(lx)), int32(a.s(cy)), int32(a.s(x1-16)), int32(a.s(cy))+int32(max(1, a.s(1))), colFilet)
+		}
+	}
+
+	// champs de saisie : contour visible (3:1 au moins), bleu et épais avec le focus,
+	// fond plus sombre quand le champ est verrouillé (conversion en cours)
+	focus, _, _ := pGetFocus.Call()
+	for id, f := range a.frames {
+		a.paintField(hdc, f, focus == a.ctl[id], isEnabled(a.ctl[id]))
+	}
+
+	// progression : seulement la valeur transmise par la conversion
+	p := a.px(a.progRc)
+	rad := (p.b - p.t) / 2
+	roundBox(hdc, p, rad, colDoux, colFilet)
+	if a.progress > 0 {
+		w := (p.r - p.l) * int32(min(a.progress, 100)) / 100
+		if w < 2*rad {
+			w = 2 * rad
+		}
+		roundBox(hdc, rect{p.l, p.t, p.l + w, p.b}, rad, colAccent, colAccent)
+	}
+
+	// journal
+	roundBox(hdc, a.px(a.logRc), int32(a.s(10)), colPanneau, colFilet)
+
+	x0 := 20
+	// pied de page
+	fy := int32(a.s(a.footY))
+	fillBox(hdc, 0, fy, rc.r, rc.b, colPanneau)
+	fillBox(hdc, 0, fy, rc.r, fy+int32(max(1, a.s(1))), colFilet)
+	drawText(hdc, appSignature, rect{int32(a.s(x0)), fy, int32(a.s(a.footerRight)), rc.b}, a.fontSmall, colDiscret, dtLeft|dtVCenter|dtSingleLine|dtEndEllip)
+}
+
+// onNotify : dessin des boutons et des cases (NM_CUSTOMDRAW).
+func (a *app) onNotify(lParam uintptr) (uintptr, bool) {
+	nm := (*nmCustomDrawT)(unsafe.Pointer(lParam))
+	if nm.hdr.code != nmCustomDraw {
+		return 0, false
+	}
+	id := int(nm.hdr.idFrom)
+	switch id {
+	case idHelp, idDatBrowse, idBkBrowse, idOpen, idConvert, idQuit, idDonate, idSuggest, idRecursive, idAir, idTop:
+	default:
+		return 0, false
+	}
+	if nm.drawStage != cddsPrepaint {
+		return cdrfDoDefault, true
+	}
+	back := colPanneau
+	if id == idHelp {
+		back = colFond
+	}
+	switch id {
+	case idRecursive, idAir, idTop:
+		a.drawCheck(nm, back, id == idAir)
+	case idConvert:
+		a.drawButton(nm, btnPrimary, back)
+	case idDonate, idSuggest:
+		a.drawButton(nm, btnLink, back)
+	default:
+		a.drawButton(nm, btnNormal, back)
+	}
+	return cdrfSkipDef, true
+}
+
+// onCtlColor : couleurs des champs, étiquettes et listes (texte et fond).
+func (a *app) onCtlColor(msg uint32, hdc, h uintptr) uintptr {
+	switch {
+	case h == a.ctl[idUpdate]:
+		pSetBkColor.Call(hdc, colFond)
+		pSetTextColor.Call(hdc, colAccentClair)
+		return brFond
+	case h == a.ctl[idDatInfo]:
+		pSetTextColor.Call(hdc, colDiscret)
+	case msg == wmCtlColorStatic && !isEnabled(h): // champ verrouillé : valeur lisible, fond plus sombre
+		pSetTextColor.Call(hdc, colInactif)
+		pSetBkColor.Call(hdc, colFond)
+		return brFond
+	case h == a.ctl[idLblMachine] || h == a.ctl[idLblFolder] || h == a.ctl[idLblSort] || h == a.ctl[idLblLaser]:
+		pSetTextColor.Call(hdc, colDiscret)
+	default:
+		pSetTextColor.Call(hdc, colTexte)
+	}
+	pSetBkColor.Call(hdc, colPanneau)
+	return brPanneau
 }
 
 // ---------------------------------------------------------------------------
@@ -878,6 +1072,9 @@ func (a *app) loadBackup(path string) {
 	a.log(Tf("log.backupLoaded", len(ms)))
 }
 
+// lockedIDs : options, langue et machine figées pendant la conversion.
+var lockedIDs = []int{idConvert, idDatBrowse, idBkBrowse, idOpen, idDatEdit, idBkEdit, idRecursive, idMachine, idFolderName, idSort, idTop, idLaser, idLang}
+
 func (a *app) convert() {
 	if a.busy {
 		return
@@ -926,8 +1123,9 @@ func (a *app) convert() {
 		fid, _ := FindJobFolder(db, folder, o.Machine.ID)
 		db.Close()
 		if fid != 0 {
-			if msgBox(a.hwnd, Tf("ask.replace", folder),
-				T("msg.title"), mbYesNo|mbIconWarning) != idYes {
+			// actions explicites ; focus initial et Entrée sur « Annuler » (non destructif)
+			if msgChoice(a.hwnd, Tf("ask.replace", folder), T("msg.title"), mbIconWarning,
+				"btn.replace", "btn.cancel", false) != idYes {
 				return
 			}
 			o.ReplaceFolder = true
@@ -936,17 +1134,17 @@ func (a *app) convert() {
 
 	a.busy = true
 	// options, langue et machine figées pendant la conversion
-	locked := []int{idConvert, idDatBrowse, idBkBrowse, idOpen, idDatEdit, idBkEdit, idRecursive, idMachine, idFolderName, idSort, idTop, idLaser, idLang}
+	locked := lockedIDs
 	for _, id := range locked {
 		enable(a.ctl[id], false)
 	}
 	wait, _, _ := pLoadCursorW.Call(0, 32514)
 	pSetCursor.Call(wait)
-	send(a.ctl[idProgress], pbmSetPos, 0, 0)
+	a.setProgress(0)
 	a.log("")
 	a.log(Tf("log.convStart", folder, o.Machine.Name))
 	out, res, err := Run(openRW, bk, o, a.log, func(d, t int) {
-		send(a.ctl[idProgress], pbmSetPos, uintptr(d*100/t), 0)
+		a.setProgress(d * 100 / t)
 		pumpMessages()
 	})
 	a.busy = false
@@ -959,10 +1157,10 @@ func (a *app) convert() {
 	arrow, _, _ := pLoadCursorW.Call(0, 32512)
 	pSetCursor.Call(arrow)
 	if err != nil {
-		send(a.ctl[idProgress], pbmSetPos, 0, 0)
+		a.setProgress(0)
 		a.log(T("log.fail") + err.Error())
 		rp, rerr := WriteReport(openRO, ReportInput{Version: appVersion(), System: reportSystem(),
-			Backup: bk, Options: o, Log: getText(a.ctl[idLog]), Err: err})
+			Backup: bk, Options: o, Log: a.logText(), Err: err})
 		if rerr != nil {
 			msgBox(a.hwnd, T("err.convFailed")+err.Error(), T("msg.title"), mbIconError)
 			return
@@ -975,22 +1173,29 @@ func (a *app) convert() {
 		}
 		return
 	}
-	send(a.ctl[idProgress], pbmSetPos, 100, 0)
+	a.setProgress(100)
 	a.outDir = out
 	enable(a.ctl[idOpen], true)
 	a.log(Tf("log.done", len(res.Converted), len(res.Skipped)))
 	a.log(T("log.outDir") + out)
 	done := Tf("msg.done", len(res.Converted), folder)
 	if n := res.Noted(); n > 0 || len(res.Skipped) > 0 {
-		// bilan inséré avant la question finale (« Ouvrir le dossier maintenant ? »)
-		sum := Tf("msg.summary", len(res.Converted)-n, n, len(res.Skipped))
-		if i := strings.LastIndex(done, "\n\n"); i >= 0 {
-			done = done[:i] + sum + done[i:]
-		}
+		done = withSummary(done, Tf("msg.summary", len(res.Converted)-n, n, len(res.Skipped)))
 	}
-	if msgBox(a.hwnd, done, T("msg.title"), mbYesNo|mbIconInfo) == idYes {
+	if msgChoice(a.hwnd, done, T("msg.title"), mbIconInfo, "btn.open", "btn.close", true) == idYes {
 		a.openOut()
 	}
+}
+
+// withSummary : message de fin dans l'ordre résultat, bilan, consignes, question.
+// Le bilan (qui commence par une ligne vide) suit les deux premiers paragraphes
+// (« Conversion terminée ! » et le nombre de réglages ajoutés).
+func withSummary(done, sum string) string {
+	parts := strings.Split(done, "\n\n")
+	if len(parts) < 3 {
+		return done + sum
+	}
+	return strings.Join(parts[:2], "\n\n") + sum + "\n\n" + strings.Join(parts[2:], "\n\n")
 }
 
 func (a *app) openOut() {
@@ -1006,6 +1211,16 @@ func pumpMessages() {
 		if r == 0 {
 			return
 		}
+		if m.message == 0x0012 { // WM_QUIT : remis dans la file pour la boucle principale
+			pPostQuitMessage.Call(m.wParam)
+			return
+		}
+		// notice ouverte pendant la conversion : Tabulation, Entrée et Échap comme d'habitude
+		if helpHwnd != 0 {
+			if d, _, _ := pIsDialogMessageW.Call(helpHwnd, uintptr(unsafe.Pointer(&m))); d != 0 {
+				continue
+			}
+		}
 		pTranslateMessage.Call(uintptr(unsafe.Pointer(&m)))
 		pDispatchMessageW.Call(uintptr(unsafe.Pointer(&m)))
 	}
@@ -1013,6 +1228,13 @@ func pumpMessages() {
 
 func (a *app) onCommand(id int, code int) {
 	switch id {
+	case idDatEdit, idBkEdit, idFolderName:
+		if code == enSetFocus || code == enKillFocus { // bord bleu du champ actif
+			if f, ok := a.frames[id]; ok {
+				f = rect{f.l - 1, f.t - 1, f.r + 1, f.b + 1}
+				pInvalidateRect.Call(a.hwnd, uintptr(unsafe.Pointer(&f)), 0)
+			}
+		}
 	case idDatBrowse:
 		start := strings.TrimSpace(getText(a.ctl[idDatEdit]))
 		if p, ok := pickPath(a.hwnd, true, T("dlg.datTitle"), start, nil); ok {
@@ -1038,6 +1260,9 @@ func (a *app) onCommand(id int, code int) {
 	case idRecursive:
 		a.countDats(true)
 	case idLang:
+		if code == cbnDropDown || code == cbnCloseUp {
+			pInvalidateRect.Call(a.ctl[id], 0, 0)
+		}
 		if code == cbnSelChange {
 			if i := int(int32(send(a.ctl[idLang], cbGetCurSel, 0, 0))); i >= 0 && i < int(nLang) && Lang(i) != cur {
 				cur = Lang(i)
@@ -1046,17 +1271,24 @@ func (a *app) onCommand(id int, code int) {
 			}
 		}
 	case idMachine:
+		if code == cbnDropDown || code == cbnCloseUp {
+			pInvalidateRect.Call(a.ctl[id], 0, 0)
+		}
 		if code == cbnSelChange {
 			a.selectMachine(int(int32(send(a.ctl[idMachine], cbGetCurSel, 0, 0))))
 		}
 	case idConvert, 1: // 1 = IDOK (touche Entrée)
 		a.convert()
+	case idSort, idLaser:
+		if code == cbnDropDown || code == cbnCloseUp {
+			pInvalidateRect.Call(a.ctl[id], 0, 0)
+		}
 	case idOpen:
 		a.openOut()
 	case idHelp:
 		a.showHelp()
-	case idQuit:
-		pDestroyWindow.Call(a.hwnd)
+	case idQuit: // comme la croix : sans effet pendant une conversion
+		pPostMessageW.Call(a.hwnd, wmClose, 0, 0)
 	case idDonate:
 		pShellExecuteW.Call(a.hwnd, wp("open"), wp(donateURL), 0, 0, 1)
 	case idSuggest:
@@ -1082,41 +1314,42 @@ func (a *app) sendSuggestion() {
 	msgBox(a.hwnd, suggestText(report), T("msg.title"), mbOK|mbIconInfo)
 }
 
+// afterShow : appelé une fois la fenêtre affichée (captures d'écran de contrôle, build « capture »).
+var afterShow = func() {}
+
 func wndProc(hwnd, msg, wParam, lParam uintptr) uintptr {
 	switch uint32(msg) {
 	case wmPaint:
-		var ps paintStruct
-		hdc, _, _ := pBeginPaint.Call(hwnd, uintptr(unsafe.Pointer(&ps)))
-		A.paint(hdc)
-		pEndPaint.Call(hwnd, uintptr(unsafe.Pointer(&ps)))
+		paintBuffered(hwnd, A.paint)
 		return 0
-	case wmCtlColorStatic:
-		hdc := wParam
-		if lParam == A.ctl[idLog] {
-			pSetBkColor.Call(hdc, rgb(255, 255, 255))
-			pSetTextColor.Call(hdc, colText)
-			return A.brWhite
+	case wmEraseBkgnd:
+		return 1
+	case wmCtlColorStatic, wmCtlColorEdit, wmCtlColorLB:
+		return A.onCtlColor(uint32(msg), wParam, lParam)
+	case wmNotify:
+		if r, ok := A.onNotify(lParam); ok {
+			return r
 		}
-		pSetBkColor.Call(hdc, colBody)
-		if lParam == A.ctl[idDatInfo] {
-			pSetTextColor.Call(hdc, colMuted)
-		} else if lParam == A.ctl[idUpdate] {
-			pSetTextColor.Call(hdc, colAccent)
-		} else {
-			pSetTextColor.Call(hdc, colText)
-		}
-		return A.brBody
 	case wmCommand:
 		A.onCommand(int(wParam&0xFFFF), int((wParam>>16)&0xFFFF))
 		return 0
+	case wmLButtonDown:
+		// clic dans le cadre d'un champ, à côté du texte : le champ prend le focus
+		x, y := int32(int16(lParam&0xFFFF)), int32(int16(lParam>>16&0xFFFF))
+		for id, f := range A.frames {
+			if x >= f.l && x < f.r && y >= f.t && y < f.b {
+				pSetFocus.Call(A.ctl[id])
+				return 0
+			}
+		}
 	case wmMeasureItem:
-		if mi := (*measureItem)(unsafe.Pointer(lParam)); mi.ctlID == idLang {
-			mi.itemHeight = uint32(A.s(20))
+		if mi := (*measureItem)(unsafe.Pointer(lParam)); mi.ctlType == 3 { // ODT_COMBOBOX
+			mi.itemHeight = uint32(A.s(24))
 			return 1
 		}
 	case wmDrawItem:
-		if di := (*drawItem)(unsafe.Pointer(lParam)); di.ctlID == idLang {
-			A.drawLangItem(di)
+		if di := (*drawItem)(unsafe.Pointer(lParam)); di.ctlType == 3 {
+			A.drawComboItem(di)
 			return 1
 		}
 	case wmSetCursor:
@@ -1147,11 +1380,43 @@ func wndProc(hwnd, msg, wParam, lParam uintptr) uintptr {
 	return r
 }
 
+// fitScreen : mode normal, compact, ou échelle réduite, pour que la fenêtre tienne
+// dans la zone de travail (1366 × 768 à 125 % ou 150 %…). Renvoie le cadre de fenêtre.
+func (a *app) fitScreen(style uint32) (wa rect, frameW, frameH int32) {
+	wa = workArea()
+	fr := rect{0, 0, 100, 100}
+	pAdjustWindowRectEx.Call(uintptr(unsafe.Pointer(&fr)), uintptr(style), 0, wsExControlPar)
+	frameW, frameH = fr.r-fr.l-100, fr.b-fr.t-100
+	availH := int(wa.b-wa.t-frameH) - 8
+	availW := int(wa.r-wa.l-frameW) - 8
+	sys := a.dpi
+	switch {
+	case a.s(normalM.clientHeight(normalM.logMin)) <= availH:
+		a.compact = false
+	case a.s(compactM.clientHeight(compactM.logMin)) <= availH:
+		a.compact = true
+	default:
+		a.compact = true
+		a.dpi = max(80, availH*96/compactM.clientHeight(compactM.logMin))
+	}
+	if a.s(cliW) > availW {
+		a.dpi = max(80, min(a.dpi, availW*96/cliW))
+	}
+	if a.dpi > sys {
+		a.dpi = sys
+	}
+	m := a.m()
+	a.cliH = min(m.clientHeight(m.logDesign), availH*96/a.dpi)
+	a.cliH = max(a.cliH, m.clientHeight(m.logMin))
+	return
+}
+
 func main() {
 	runtime.LockOSThread()
 	pCoInitializeEx.Call(0, 2)
 	icc := initCC{8, 0x0000FFFF}
 	pInitCommonControlsEx.Call(uintptr(unsafe.Pointer(&icc)))
+	initTheme()
 
 	a := A
 	a.hInst, _, _ = pGetModuleHandleW.Call(0)
@@ -1168,15 +1433,19 @@ func main() {
 			a.dpi = int(d)
 		}
 	}
+	a.realDpi = a.dpi
+	if testDpi > 0 {
+		a.dpi = testDpi
+	}
+	sysDpi := a.dpi
+	style := uint32(wsOverlapped | wsCaption | wsSysMenu | wsMinimizeBox | wsClipChildren)
+	wa, frameW, frameH := a.fitScreen(style)
 	cur = initialLang()
 	a.makeFonts()
-	a.brBody, _, _ = pCreateSolidBrush.Call(colBody)
-	a.brWhite, _, _ = pCreateSolidBrush.Call(rgb(255, 255, 255))
-	a.brHeader, _, _ = pCreateSolidBrush.Call(colHeader)
-	a.brAccent, _, _ = pCreateSolidBrush.Call(colAccent)
-	icoL, _, _ := pLoadImageW.Call(a.hInst, 1, 1, uintptr(a.s(32)), uintptr(a.s(32)), 0)
-	icoS, _, _ := pLoadImageW.Call(a.hInst, 1, 1, uintptr(a.s(16)), uintptr(a.s(16)), 0)
-	a.icoBig, _, _ = pLoadImageW.Call(a.hInst, 1, 1, uintptr(a.s(60)), uintptr(a.s(60)), 0)
+	// icônes à la taille du système (barre des tâches), logo de secours à l'échelle de la fenêtre
+	icoL, _, _ := pLoadImageW.Call(a.hInst, 1, 1, uintptr(32*sysDpi/96), uintptr(32*sysDpi/96), 0)
+	icoS, _, _ := pLoadImageW.Call(a.hInst, 1, 1, uintptr(16*sysDpi/96), uintptr(16*sysDpi/96), 0)
+	a.icoBig, _, _ = pLoadImageW.Call(a.hInst, 1, 1, uintptr(a.s(56)), uintptr(a.s(56)), 0)
 	cur, _, _ := pLoadCursorW.Call(0, 32512)
 
 	cls := w16("VAPConvertisseurEpilog")
@@ -1186,29 +1455,24 @@ func main() {
 		hInstance:     a.hInst,
 		hIcon:         icoL,
 		hCursor:       cur,
-		hbrBackground: a.brBody,
+		hbrBackground: brFond,
 		lpszClassName: cls,
 		hIconSm:       icoS,
 	}
 	wc.cbSize = uint32(unsafe.Sizeof(wc))
 	pRegisterClassExW.Call(uintptr(unsafe.Pointer(&wc)))
 
-	style := uint32(wsOverlapped | wsCaption | wsSysMenu | wsMinimizeBox | wsClipChildren)
-	rc := rect{0, 0, int32(a.s(cliW)), int32(a.s(cliH))}
-	pAdjustWindowRectEx.Call(uintptr(unsafe.Pointer(&rc)), uintptr(style), 0, wsExControlPar)
-	ww, wh := rc.r-rc.l, rc.b-rc.t
-	sw, _, _ := pGetSystemMetrics.Call(0)
-	sh, _, _ := pGetSystemMetrics.Call(1)
-	x, y := (int32(sw)-ww)/2, (int32(sh)-wh)/2
-	if y < 0 {
-		y = 0
-	}
+	ww, wh := int32(a.s(cliW))+frameW, int32(a.s(a.cliH))+frameH
+	x := wa.l + (wa.r-wa.l-ww)/2
+	y := wa.t + (wa.b-wa.t-wh)/2
+	x, y = max(x, wa.l), max(y, wa.t)
 	a.hwnd, _, _ = pCreateWindowExW.Call(wsExControlPar, uintptr(unsafe.Pointer(cls)), wp(T("app.title")),
 		uintptr(style), uintptr(x), uintptr(y), uintptr(ww), uintptr(wh), 0, 0, a.hInst, 0)
 	if a.hwnd == 0 {
 		msgBox(0, T("err.window"), T("msg.title"), mbIconError)
 		return
 	}
+	darkTitle(a.hwnd)
 	a.buildUI()
 
 	// dossier passé en argument (glisser-déposer sur l'icône)
@@ -1230,6 +1494,7 @@ func main() {
 	a.checkUpdate()
 	user32.NewProc("SetForegroundWindow").Call(a.hwnd)
 	pSetFocus.Call(a.ctl[idDatBrowse])
+	afterShow()
 
 	var m msgT
 	for {
@@ -1340,7 +1605,7 @@ func pickClassic(owner uintptr, folder bool, title, start string, filters [][2]s
 // Langue : choix mémorisé dans %APPDATA%\VAP Convertisseur\langue.txt,
 // sinon langue de Windows (anglais si elle n'est pas proposée).
 
-const appSignature = "VAP  V1.8"
+const appSignature = "VAP  V2.0"
 
 func langFile() string {
 	d, err := os.UserConfigDir()
