@@ -14,6 +14,7 @@ var (
 	helpEdit  uintptr
 	helpClose uintptr
 	helpClass bool
+	helpPrevFocus uintptr // contrôle actif à l'ouverture de la notice
 	helpCB    = syscall.NewCallback(helpProc)
 	helpSize  struct{ w, h, hdr, foot int } // unités logiques
 )
@@ -62,6 +63,9 @@ func helpProc(hwnd, msg, wParam, lParam uintptr) uintptr {
 	case wmDestroy:
 		enable(a.hwnd, true)
 		user32.NewProc("SetForegroundWindow").Call(a.hwnd)
+		if helpPrevFocus != 0 { // retour sur le contrôle actif avant la notice
+			pSetFocus.Call(helpPrevFocus)
+		}
 		helpHwnd = 0
 		return 0
 	}
@@ -128,6 +132,7 @@ func (a *app) showHelp() {
 		rtf := noticeRTF(noticeText())
 		st := struct{ flags, codepage uint32 }{0, 0} // ST_DEFAULT, texte RTF en ASCII
 		send(helpEdit, emSetTextEx, uintptr(unsafe.Pointer(&st)), uintptr(unsafe.Pointer(&append([]byte(rtf), 0)[0])))
+		a.richZoom(helpEdit)
 	} else {
 		helpEdit = mk("EDIT", strings.ReplaceAll(noticeText(), "\n", "\r\n"), esMultiline|esReadOnly|esAutoVScroll|wsVScroll, 0,
 			tx, ty, tw, th, idHelpText)
@@ -136,6 +141,7 @@ func (a *app) showHelp() {
 	m2 := a.m()
 	bw := max(120, a.measure(a.fontUI, T("btn.close"))+36)
 	helpClose = mk("BUTTON", T("btn.close"), bsDefPushButton|wsTabStop, 0, hs.w-20-bw, hs.h-hs.foot+(hs.foot-m2.btn)/2, bw, m2.btn, idHelpClose)
+	helpPrevFocus, _, _ = pGetFocus.Call()
 	enable(a.hwnd, false)
 	pShowWindow.Call(helpHwnd, 1)
 	pUpdateWindow.Call(helpHwnd)

@@ -82,6 +82,15 @@ func (a *app) logFont(face string, pt int) {
 	copy(cf.face[:31], toUTF16(face))
 	send(h, emSetCharFormat, scfAll, uintptr(unsafe.Pointer(&cf)))
 	send(h, emSetCharFormat, 0, uintptr(unsafe.Pointer(&cf))) // format par défaut
+	a.richZoom(h)
+}
+
+// richZoom : le texte d'un RichEdit (en points) suit l'échelle de la fenêtre quand
+// celle-ci est réduite pour tenir dans un petit écran.
+func (a *app) richZoom(h uintptr) {
+	if a.realDpi > 0 && a.realDpi != a.dpi {
+		send(h, 0x0400+225, uintptr(a.dpi), uintptr(a.realDpi)) // EM_SETZOOM
+	}
 }
 
 func toUTF16(s string) []uint16 {

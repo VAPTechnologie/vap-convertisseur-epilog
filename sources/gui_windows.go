@@ -391,6 +391,7 @@ type app struct {
 	footY                                int          // haut du pied de page (unités logiques)
 	progress                             int          // 0 à 100
 	richLog                              bool         // journal en couleurs (RichEdit)
+	realDpi                              int          // DPI réel du système (texte des RichEdit, en points)
 	logBuf                               strings.Builder
 }
 
@@ -1176,6 +1177,16 @@ func pumpMessages() {
 		if r == 0 {
 			return
 		}
+		if m.message == 0x0012 { // WM_QUIT : remis dans la file pour la boucle principale
+			pPostQuitMessage.Call(m.wParam)
+			return
+		}
+		// notice ouverte pendant la conversion : Tabulation, Entrée et Échap comme d'habitude
+		if helpHwnd != 0 {
+			if d, _, _ := pIsDialogMessageW.Call(helpHwnd, uintptr(unsafe.Pointer(&m))); d != 0 {
+				continue
+			}
+		}
 		pTranslateMessage.Call(uintptr(unsafe.Pointer(&m)))
 		pDispatchMessageW.Call(uintptr(unsafe.Pointer(&m)))
 	}
@@ -1388,6 +1399,7 @@ func main() {
 			a.dpi = int(d)
 		}
 	}
+	a.realDpi = a.dpi
 	if testDpi > 0 {
 		a.dpi = testDpi
 	}
