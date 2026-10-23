@@ -1629,7 +1629,7 @@ func pickClassic(owner uintptr, folder bool, title, start string, filters [][2]s
 // Langue : choix mémorisé dans %APPDATA%\VAP Convertisseur\langue.txt,
 // sinon langue de Windows (anglais si elle n'est pas proposée).
 
-const appSignature = "VAP  V2.0"
+const appSignature = "VAP  V2.1"
 
 func langFile() string {
 	d, err := os.UserConfigDir()

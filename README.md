@@ -6,9 +6,9 @@
 
 Vos anciens réglages Epilog (fichiers **.DAT** des anciens pilotes) passent dans **Epilog Job Manager** en un clic, déjà rangés par machine, sans rien ressaisir.
 
-**[⬇ Télécharger la dernière version (V2.0)](../../releases/latest)**
+**[⬇ Télécharger la dernière version (V2.1)](../../releases/latest)**
 
-Gratuit · Windows 10 et 11 · 9 langues · aucune installation · interface sombre VAP
+Gratuit · Windows 10 et 11 · 9 langues · aucune installation · mode clair ou sombre
 
 ![Le convertisseur](docs/capture.png)
 
