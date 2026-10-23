@@ -2,6 +2,16 @@
 
 Le VAP Convertisseur Epilog reprend les anciens réglages des pilotes Epilog (fichiers .DAT) et les range automatiquement dans Epilog Job Manager. Vos années de réglages matières passent dans Job Manager en un clic, sans rien ressaisir.
 
+## Version 2.1 — octobre 2026
+
+Le convertisseur se choisit maintenant en clair ou en sombre. La conversion ne change pas : mêmes réglages produits, mêmes contrôles.
+
+- **Bouton « Mode clair / Mode sombre »** dans le bandeau, à côté de la notice et de la langue : il indique le thème qui sera activé, avec un soleil ou une lune. Le changement est immédiat, sans redémarrage, et ne touche ni aux champs remplis, ni aux options, ni au journal, ni à une conversion en cours.
+- **Thème mémorisé** : le choix est retrouvé au lancement suivant. Sans choix enregistré, le convertisseur démarre en sombre.
+- **Toutes les fenêtres suivent le thème** : fenêtre principale, notice, confirmations, messages de fin et d'erreur. Le mode clair garde le bleu VAP, des contours bien visibles et des messages (réussite, avertissement, erreur) lisibles sur fond clair ; le bandeau reste bleu nuit pour le logo VAP.
+- **Neuf langues** : « Mode clair » et « Mode sombre » sont traduits ; le bandeau passe sur deux rangées pour que rien ne se chevauche, même sur un petit écran.
+- **Améliorations de la V2.0 conservées** : contrastes vérifiés, badge « Obligatoire », journal coloré avec symboles, « Remplacer / Annuler », « Ouvrir le dossier / Fermer », notice aérée, mode compact.
+
 ## Version 2.0 — octobre 2026
 
 Une nouvelle interface sombre, aux couleurs de la suite VAP, plus lisible et mieux adaptée aux petits écrans. La conversion ne change pas : mêmes réglages produits, mêmes contrôles.

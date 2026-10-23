@@ -256,6 +256,12 @@ var tr = map[string][nLang]string{
 	"btn.cancel": {
 		"Annuler", "Cancel", "Cancelar", "Abbrechen", "Annulla", "Cancelar", "Annuleren", "取消", "キャンセル",
 	},
+	"btn.themeLight": {
+		"Mode clair", "Light mode", "Modo claro", "Heller Modus", "Modalità chiara", "Modo claro", "Lichte modus", "浅色模式", "ライトモード",
+	},
+	"btn.themeDark": {
+		"Mode sombre", "Dark mode", "Modo oscuro", "Dunkler Modus", "Modalità scura", "Modo escuro", "Donkere modus", "深色模式", "ダークモード",
+	},
 	"lbl.required": {
 		"Obligatoire", "Required", "Obligatorio", "Pflicht", "Obbligatorio", "Obrigatório", "Verplicht", "必选", "必須",
 	},

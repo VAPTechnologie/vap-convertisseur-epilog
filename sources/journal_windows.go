@@ -16,6 +16,7 @@ import (
 )
 
 const (
+	emExGetSel       = 0x0400 + 52
 	emExSetSel       = 0x0400 + 55
 	emSetBkgndColor  = 0x0400 + 67
 	emSetCharFormat  = 0x0400 + 68
@@ -105,6 +106,7 @@ func toUTF16(s string) []uint16 {
 func (a *app) clearLog() {
 	setText(a.ctl[idLog], "")
 	a.logBuf.Reset()
+	a.logEntries = a.logEntries[:0]
 }
 
 // logText : texte complet du journal, tel que l'ancien champ texte le renvoyait.
@@ -117,20 +119,9 @@ func (a *app) log(s string) {
 		prefix = ""
 	}
 	a.logBuf.WriteString(prefix + s)
+	a.logEntries = append(a.logEntries, s)
 	if a.richLog {
-		var n struct{ flags, codepage uint32 }
-		n.flags, n.codepage = 0x8|0x2, 1200 // GTL_NUMCHARS | GTL_PRECISE
-		end := int32(send(h, emGetTextLenEx, uintptr(unsafe.Pointer(&n)), 0))
-		cr := charRange{end, end}
-		send(h, emExSetSel, 0, uintptr(unsafe.Pointer(&cr)))
-		col, bold := logStyle(logKindOf(s))
-		cf := charFormat{mask: cfmColor | cfmBold, color: uint32(col)}
-		if bold {
-			cf.effects = cfeBold
-		}
-		cf.size = uint32(unsafe.Sizeof(cf))
-		send(h, emSetCharFormat, scfSelection, uintptr(unsafe.Pointer(&cf)))
-		send(h, emReplaceSel, 0, wp(prefix+s))
+		a.richInsert(prefix, s)
 		send(h, emScrollCaret, 0, 0)
 		send(h, 0x0115, 7, 0) // WM_VSCROLL SB_BOTTOM : dernière ligne visible
 	} else {
@@ -142,6 +133,68 @@ func (a *app) log(s string) {
 	if !a.inWelcome {
 		a.welcomeOnly = false
 	}
+}
+
+// richInsert : ajoute une ligne en fin de journal, dans la couleur de son type.
+func (a *app) richInsert(prefix, s string) {
+	h := a.ctl[idLog]
+	var n struct{ flags, codepage uint32 }
+	n.flags, n.codepage = 0x8|0x2, 1200 // GTL_NUMCHARS | GTL_PRECISE
+	end := int32(send(h, emGetTextLenEx, uintptr(unsafe.Pointer(&n)), 0))
+	cr := charRange{end, end}
+	send(h, emExSetSel, 0, uintptr(unsafe.Pointer(&cr)))
+	col, bold := logStyle(logKindOf(s))
+	cf := charFormat{mask: cfmColor | cfmBold, color: uint32(col)}
+	if bold {
+		cf.effects = cfeBold
+	}
+	cf.size = uint32(unsafe.Sizeof(cf))
+	send(h, emSetCharFormat, scfSelection, uintptr(unsafe.Pointer(&cf)))
+	send(h, emReplaceSel, 0, wp(prefix+s))
+}
+
+// recolorLog : journal redessiné dans les couleurs du thème courant. Le texte (et celui
+// du rapport d'erreur, logBuf) ne change pas ; la position de lecture est conservée.
+func (a *app) recolorLog() {
+	h := a.ctl[idLog]
+	if !a.richLog {
+		pInvalidateRect.Call(h, 0, 1)
+		return
+	}
+	si := getScroll(h)
+	atEnd := int32(si.page) == 0 || si.pos+int32(si.page) >= si.max
+	var pos point
+	send(h, emGetScrollPos, 0, uintptr(unsafe.Pointer(&pos)))
+	var sel charRange // sélection en cours (copie d'un passage), rendue après la reconstruction
+	send(h, emExGetSel, 0, uintptr(unsafe.Pointer(&sel)))
+	send(h, 0x000B, 0, 0) // WM_SETREDRAW : pas de scintillement pendant la reconstruction
+	send(h, emSetBkgndColor, 0, colPanneau)
+	setText(h, "")
+	for i, s := range a.logEntries {
+		prefix := "\r\n"
+		if i == 0 || (i > 0 && a.logBufEmptyBefore(i)) {
+			prefix = ""
+		}
+		a.richInsert(prefix, s)
+	}
+	send(h, emExSetSel, 0, uintptr(unsafe.Pointer(&sel)))
+	send(h, 0x000B, 1, 0)
+	if atEnd {
+		send(h, 0x0115, 7, 0) // SB_BOTTOM
+	} else {
+		send(h, emSetScrollPos, 0, uintptr(unsafe.Pointer(&pos)))
+	}
+	pInvalidateRect.Call(h, 0, 1)
+}
+
+// logBufEmptyBefore : le journal était-il encore vide avant l'entrée i (lignes vides en tête) ?
+func (a *app) logBufEmptyBefore(i int) bool {
+	for _, s := range a.logEntries[:i] {
+		if s != "" {
+			return false
+		}
+	}
+	return true
 }
 
 func logStyle(k int) (uintptr, bool) {
