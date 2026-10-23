@@ -154,11 +154,14 @@ func (a *app) renderNotice() {
 	}
 	var pos point
 	send(helpEdit, emGetScrollPos, 0, uintptr(unsafe.Pointer(&pos)))
+	var sel charRange
+	send(helpEdit, emExGetSel, 0, uintptr(unsafe.Pointer(&sel)))
 	send(helpEdit, emSetBkgndColor, 0, colPanneau)
 	rtf := noticeRTF(noticeText())
 	st := struct{ flags, codepage uint32 }{0, 0} // ST_DEFAULT, texte RTF en ASCII
 	send(helpEdit, emSetTextEx, uintptr(unsafe.Pointer(&st)), uintptr(unsafe.Pointer(&append([]byte(rtf), 0)[0])))
 	a.richZoom(helpEdit)
+	send(helpEdit, emExSetSel, 0, uintptr(unsafe.Pointer(&sel)))
 	send(helpEdit, emSetScrollPos, 0, uintptr(unsafe.Pointer(&pos)))
 }
 

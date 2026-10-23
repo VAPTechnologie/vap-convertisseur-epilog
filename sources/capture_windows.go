@@ -401,7 +401,8 @@ func (a *app) uiState() string {
 	for _, id := range []int{idOpen, idConvert, idDatEdit, idAir} {
 		fmt.Fprintf(&b, "%s actif=%v;", ctlName(id), isEnabled(a.ctl[id]))
 	}
-	fmt.Fprintf(&b, "progression=%d;journal=%q;entrées=%d", a.progress, a.logText(), len(a.logEntries))
+	// texte du rapport (logBuf) et texte réellement affiché dans le journal
+	fmt.Fprintf(&b, "progression=%d;journal=%q;affiché=%q;entrées=%d", a.progress, a.logText(), getText(a.ctl[idLog]), len(a.logEntries))
 	return b.String()
 }
 

@@ -126,8 +126,15 @@ func saveTheme(dark bool) {
 	if !dark {
 		v = "clair"
 	}
-	os.MkdirAll(filepath.Dir(p), 0o755)
-	os.WriteFile(p, []byte(v), 0o644)
+	// écriture dans un fichier provisoire puis renommage : jamais de fichier à moitié écrit ;
+	// en cas d'échec, le choix précédent reste et le programme démarre en sombre au pire
+	if os.MkdirAll(filepath.Dir(p), 0o755) != nil {
+		return
+	}
+	tmp := p + ".tmp"
+	if os.WriteFile(tmp, []byte(v), 0o644) != nil || os.Rename(tmp, p) != nil {
+		os.Remove(tmp)
+	}
 }
 
 func setPaletteDark(dark bool) {

@@ -16,6 +16,7 @@ import (
 )
 
 const (
+	emExGetSel       = 0x0400 + 52
 	emExSetSel       = 0x0400 + 55
 	emSetBkgndColor  = 0x0400 + 67
 	emSetCharFormat  = 0x0400 + 68
@@ -164,6 +165,8 @@ func (a *app) recolorLog() {
 	atEnd := int32(si.page) == 0 || si.pos+int32(si.page) >= si.max
 	var pos point
 	send(h, emGetScrollPos, 0, uintptr(unsafe.Pointer(&pos)))
+	var sel charRange // sélection en cours (copie d'un passage), rendue après la reconstruction
+	send(h, emExGetSel, 0, uintptr(unsafe.Pointer(&sel)))
 	send(h, 0x000B, 0, 0) // WM_SETREDRAW : pas de scintillement pendant la reconstruction
 	send(h, emSetBkgndColor, 0, colPanneau)
 	setText(h, "")
@@ -174,6 +177,7 @@ func (a *app) recolorLog() {
 		}
 		a.richInsert(prefix, s)
 	}
+	send(h, emExSetSel, 0, uintptr(unsafe.Pointer(&sel)))
 	send(h, 0x000B, 1, 0)
 	if atEnd {
 		send(h, 0x0115, 7, 0) // SB_BOTTOM
