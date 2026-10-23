@@ -128,11 +128,7 @@ func (a *app) showHelp() {
 		helpEdit = mk(richEditClass, "", esMultiline|esReadOnly|esAutoVScroll|wsVScroll|esDisableNoScrl, 0, tx, ty, tw, th, idHelpText)
 	}
 	if helpEdit != 0 {
-		send(helpEdit, emSetBkgndColor, 0, colPanneau)
-		rtf := noticeRTF(noticeText())
-		st := struct{ flags, codepage uint32 }{0, 0} // ST_DEFAULT, texte RTF en ASCII
-		send(helpEdit, emSetTextEx, uintptr(unsafe.Pointer(&st)), uintptr(unsafe.Pointer(&append([]byte(rtf), 0)[0])))
-		a.richZoom(helpEdit)
+		a.renderNotice()
 	} else {
 		helpEdit = mk("EDIT", strings.ReplaceAll(noticeText(), "\n", "\r\n"), esMultiline|esReadOnly|esAutoVScroll|wsVScroll, 0,
 			tx, ty, tw, th, idHelpText)
@@ -149,6 +145,21 @@ func (a *app) showHelp() {
 	pShowWindow.Call(helpHwnd, 1)
 	pUpdateWindow.Call(helpHwnd)
 	pSetFocus.Call(helpClose)
+}
+
+// renderNotice : texte de la notice (RichEdit) dans les couleurs du thème courant.
+func (a *app) renderNotice() {
+	if helpEdit == 0 || !isRich(helpEdit) {
+		return
+	}
+	var pos point
+	send(helpEdit, emGetScrollPos, 0, uintptr(unsafe.Pointer(&pos)))
+	send(helpEdit, emSetBkgndColor, 0, colPanneau)
+	rtf := noticeRTF(noticeText())
+	st := struct{ flags, codepage uint32 }{0, 0} // ST_DEFAULT, texte RTF en ASCII
+	send(helpEdit, emSetTextEx, uintptr(unsafe.Pointer(&st)), uintptr(unsafe.Pointer(&append([]byte(rtf), 0)[0])))
+	a.richZoom(helpEdit)
+	send(helpEdit, emSetScrollPos, 0, uintptr(unsafe.Pointer(&pos)))
 }
 
 // noticeRTF : notice mise en forme sans changer le texte. Titres (ligne non indentée

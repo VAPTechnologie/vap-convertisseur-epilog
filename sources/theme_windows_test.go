@@ -29,7 +29,7 @@ func contrast(a, b uintptr) float64 {
 }
 
 // Contrastes mesurés : 4,5:1 pour le texte, 3:1 pour les contours et indicateurs utiles.
-func TestContrastes(t *testing.T) {
+func testContrastes(t *testing.T) {
 	cases := []struct {
 		nom      string
 		fg, bg   uintptr
@@ -62,16 +62,32 @@ func TestContrastes(t *testing.T) {
 	}
 	for _, c := range cases {
 		r := contrast(c.fg, c.bg)
-		t.Logf("%-70s %5.2f:1 (minimum %.1f)", c.nom, r, c.min)
+		t.Logf("[%s] %-70s %5.2f:1 (minimum %.1f)", themeName(), c.nom, r, c.min)
 		if r < c.min {
-			t.Errorf("%s : %.2f:1 < %.1f:1", c.nom, r, c.min)
+			t.Errorf("[%s] %s : %.2f:1 < %.1f:1", themeName(), c.nom, r, c.min)
 		}
+	}
+}
+
+func themeName() string {
+	if curPal == &lightPal {
+		return "clair"
+	}
+	return "sombre"
+}
+
+// Les deux thèmes, et le bandeau (toujours sombre) avec ses boutons.
+func TestContrastesDeuxThemes(t *testing.T) {
+	defer usePalette(curPal)
+	for _, p := range []*palette{&darkPal, &lightPal} {
+		usePalette(p)
+		t.Run(themeName(), testContrastes)
 	}
 }
 
 // Nouveaux libellés présents dans les 9 langues.
 func TestNouveauxLibelles(t *testing.T) {
-	for _, k := range []string{"btn.yes", "btn.no", "btn.ok", "btn.replace", "btn.cancel", "lbl.required"} {
+	for _, k := range []string{"btn.yes", "btn.no", "btn.ok", "btn.replace", "btn.cancel", "lbl.required", "btn.themeLight", "btn.themeDark"} {
 		for l := Lang(0); l < nLang; l++ {
 			if tr[k][l] == "" {
 				t.Errorf("%s [%s] manquant", k, langCodes[l])

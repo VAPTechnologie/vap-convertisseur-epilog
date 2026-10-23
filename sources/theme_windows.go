@@ -13,32 +13,7 @@ import (
 	"unsafe"
 )
 
-// couleurs de l'Analyseur Wi-Fi (FOND, PANNEAU, DOUX, FILET, TEXTE, DISCRET, ACCENT…)
-var (
-	colFond        = rgb(0x0B, 0x12, 0x20)
-	colPanneau     = rgb(0x11, 0x1A, 0x2C)
-	colDoux        = rgb(0x16, 0x21, 0x3A)
-	colFilet       = rgb(0x22, 0x30, 0x4D)
-	colTexte       = rgb(0xE6, 0xED, 0xF7)
-	colDiscret     = rgb(0xA9, 0xB8, 0xD0) // textes secondaires : 8,6:1 sur un panneau (Analyseur : #8FA1BD, 6,6:1)
-	colAccent      = rgb(0x2E, 0x8B, 0xFF)
-	colAccentClair = rgb(0x5F, 0xB0, 0xFF)
-	colTexteAccent = rgb(0xFF, 0xFF, 0xFF)
-	colSelection   = rgb(0x1B, 0x33, 0x58)
-	colEnteteDebut = rgb(0x0D, 0x17, 0x30)
-	colInactif     = rgb(0x7C, 0x8A, 0xA3) // contrôle verrouillé : encore lisible (5:1)
-	colSurvol      = rgb(0x2C, 0x3E, 0x63)
-	colBord        = rgb(0x5B, 0x70, 0x96) // contour des champs, cases et boutons : 3,5:1
-	colBordSurvol  = rgb(0x74, 0x88, 0xAD) // survol : 4,9:1
-	colPrincipal   = rgb(0x1F, 0x6F, 0xE0) // fond de « Convertir » : texte blanc à 4,8:1
-	colPrincipalOn = rgb(0x1A, 0x5E, 0xC4) // « Convertir » enfoncé
-	colAnneau      = rgb(0x9C, 0xCB, 0xFF) // bord de « Convertir » survolé
-	colImpose      = rgb(0x3A, 0x4F, 0x72) // case cochée mais verrouillée
-	colVert        = rgb(0x3B, 0xC9, 0x84)
-	colOrange      = rgb(0xF3, 0xB0, 0x2B)
-	colRouge       = rgb(0xFF, 0x5A, 0x5A)
-	colSeparateur  = rgb(70, 90, 120) // trait après le logo
-)
+// couleurs : voir palette_windows.go (palette sombre de l'Analyseur Wi-Fi et palette claire)
 
 var (
 	uxtheme  = syscall.NewLazyDLL("uxtheme.dll")
@@ -141,23 +116,22 @@ var (
 	testDpi      int
 )
 
-// pinceaux de la charte, créés une fois
-var brFond, brPanneau, brDoux uintptr
-
 func initTheme() {
-	brFond, _, _ = pCreateSolidBrush.Call(colFond)
-	brPanneau, _, _ = pCreateSolidBrush.Call(colPanneau)
-	brDoux, _, _ = pCreateSolidBrush.Call(colDoux)
+	initBrushes()
 	comboCB = syscall.NewCallback(comboProc)
 	editCB = syscall.NewCallback(editProc)
 }
 
-// darkTitle : barre de titre sombre (Windows 10 2004+ / 11) ; sans effet ailleurs.
+// darkTitle : barre de titre aux couleurs du thème courant, sombre ou claire
+// (Windows 10 2004+ / 11) ; sans effet ailleurs.
 func darkTitle(hwnd uintptr) {
 	if pDwmSetWindowAttribute.Find() != nil {
 		return
 	}
-	on := int32(1)
+	on := int32(0)
+	if isDark {
+		on = 1
+	}
 	if r, _, _ := pDwmSetWindowAttribute.Call(hwnd, 20, uintptr(unsafe.Pointer(&on)), 4); int32(r) < 0 {
 		pDwmSetWindowAttribute.Call(hwnd, 19, uintptr(unsafe.Pointer(&on)), 4) // anciennes versions de Windows 10
 	}
@@ -422,11 +396,11 @@ func (a *app) drawCheck(nm *nmCustomDrawT, back uintptr, required bool) {
 var (
 	comboCB    uintptr // syscall.NewCallback(comboProc), créé par initTheme
 	comboHover = map[uintptr]bool{}
-	comboBack  = map[uintptr]uintptr{} // couleur derrière les coins arrondis
+	comboHead  = map[uintptr]bool{} // liste du bandeau (langue) : toujours dessinée en sombre
 )
 
-func (a *app) themeCombo(h uintptr, back uintptr) {
-	comboBack[h] = back
+func (a *app) themeCombo(h uintptr, header bool) {
+	comboHead[h] = header
 	pSetWindowTheme.Call(h, wp(""), wp("")) // pas d'animation de thème par-dessus notre dessin
 	pSetWindowSubclass.Call(h, comboCB, 1, 0)
 	ci := comboInfo{size: uint32(unsafe.Sizeof(comboInfo{}))}
@@ -440,7 +414,11 @@ func comboProc(hwnd, msg, wParam, lParam, id, ref uintptr) uintptr {
 	case wmPaint:
 		var ps paintStruct
 		hdc, _, _ := pBeginPaint.Call(hwnd, uintptr(unsafe.Pointer(&ps)))
-		A.paintCombo(hwnd, hdc)
+		if comboHead[hwnd] {
+			withPalette(&darkPal, func() { A.paintCombo(hwnd, hdc) })
+		} else {
+			A.paintCombo(hwnd, hdc)
+		}
 		pEndPaint.Call(hwnd, uintptr(unsafe.Pointer(&ps)))
 		return 0
 	case wmEraseBkgnd:
@@ -462,7 +440,7 @@ func comboProc(hwnd, msg, wParam, lParam, id, ref uintptr) uintptr {
 	case wmNcDestroy:
 		pRemoveWindowSubclass.Call(hwnd, comboCB, id)
 		delete(comboHover, hwnd)
-		delete(comboBack, hwnd)
+		delete(comboHead, hwnd)
 	}
 	r, _, _ := pDefSubclassProc.Call(hwnd, msg, wParam, lParam)
 	return r
@@ -471,7 +449,11 @@ func comboProc(hwnd, msg, wParam, lParam, id, ref uintptr) uintptr {
 func (a *app) paintCombo(h, hdc uintptr) {
 	var r rect
 	pGetClientRect.Call(h, uintptr(unsafe.Pointer(&r)))
-	fillBox(hdc, r.l, r.t, r.r, r.b, comboBack[h])
+	back := colPanneau
+	if comboHead[h] {
+		back = colFond
+	}
+	fillBox(hdc, r.l, r.t, r.r, r.b, back)
 	on := isEnabled(h)
 	focus, _, _ := pGetFocus.Call()
 	dropped := send(h, cbGetDropped, 0, 0) != 0

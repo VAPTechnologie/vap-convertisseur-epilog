@@ -234,6 +234,7 @@ const (
 	idDonate
 	idSuggest
 	idUpdate
+	idTheme
 )
 
 // Page de don (PayPal.Me de VAP Technologie), ouverte dans le navigateur.
@@ -395,6 +396,7 @@ type app struct {
 	logBar                               uintptr      // barre de défilement VAP du journal
 	realDpi                              int          // DPI réel du système (texte des RichEdit, en points)
 	logBuf                               strings.Builder
+	logEntries                           []string // lignes du journal, pour le redessiner après un changement de thème
 }
 
 // card : panneau arrondi d'une étape (unités logiques).
@@ -419,7 +421,7 @@ type metrics struct {
 
 var (
 	normalM  = metrics{hdr: 66, top: 12, pad: 10, title: 24, gap: 7, row: 30, chk: 24, cardGap: 8, prog: 8, foot: 54, btn: 34, logo: 26, logMin: 110, logDesign: 200}
-	compactM = metrics{hdr: 48, top: 6, pad: 7, title: 22, gap: 5, row: 28, chk: 22, cardGap: 6, prog: 6, foot: 46, btn: 30, logo: 21, logMin: 84, logDesign: 160, side: true}
+	compactM = metrics{hdr: 54, top: 6, pad: 7, title: 22, gap: 5, row: 28, chk: 22, cardGap: 6, prog: 6, foot: 46, btn: 30, logo: 21, logMin: 84, logDesign: 160, side: true}
 )
 
 func (a *app) m() metrics {
@@ -480,6 +482,7 @@ func (a *app) label(id int, style uint32) uintptr {
 // buildUI : crée les contrôles ; textes et positions sont posés par applyLanguage / layout.
 func (a *app) buildUI() {
 	const combo = cbsDropDownList | cbsOwnerDrawFixed | cbsHasStrings | wsVScroll | wsTabStop
+	a.child("BUTTON", "", bsPushButton|wsTabStop, 0, 0, 0, 10, 10, idTheme)
 	a.child("BUTTON", "", bsPushButton|wsTabStop, 0, 0, 0, 10, 10, idHelp)
 	// liste des langues avec le drapeau du pays (flags_windows.go)
 	a.child("COMBOBOX", "", combo, 0, 0, 0, 10, 300, idLang)
@@ -511,12 +514,12 @@ func (a *app) buildUI() {
 	a.child("BUTTON", "", bsPushButton|wsTabStop, 0, 0, 0, 10, 10, idSuggest)
 	a.child("STATIC", "", ssLeft|ssNotify|ssEndEllip|ssCenterImg, 0, 0, 0, 10, 10, idUpdate)
 	enable(a.ctl[idOpen], false)
-	a.themeCombo(a.ctl[idLang], colFond)
+	a.themeCombo(a.ctl[idLang], true)
 	for _, id := range []int{idDatEdit, idBkEdit, idFolderName} {
 		a.themeEdit(a.ctl[id])
 	}
 	for _, id := range []int{idMachine, idSort, idLaser} {
-		a.themeCombo(a.ctl[id], colPanneau)
+		a.themeCombo(a.ctl[id], false)
 	}
 
 	send(a.ctl[idAir], bmSetCheck, 1, 0)
@@ -538,6 +541,7 @@ func (a *app) applyLanguage(first bool) {
 	} {
 		setText(a.ctl[id], T(k))
 	}
+	setText(a.ctl[idTheme], a.themeLabel())
 	fill := func(id int, keys []string, def int) {
 		sel := int(int32(send(a.ctl[id], cbGetCurSel, 0, 0)))
 		if first || sel < 0 {
@@ -611,6 +615,9 @@ func (a *app) makeFonts() {
 	}
 	a.logFont(face, 9)
 	send(a.ctl[idConvert], wmSetFont, a.fontBold, 1)
+	for _, id := range []int{idHelp, idTheme, idLang} { // boutons du bandeau, sur deux rangées
+		send(a.ctl[id], wmSetFont, a.fontSmall, 1)
+	}
 	for _, f := range old {
 		if f != 0 {
 			pDeleteObject.Call(f)
@@ -658,17 +665,22 @@ func (a *app) layout() {
 	}
 	tw := func(k string) int { return a.measure(a.fontUI, T(k)) }
 
-	// en-tête : notice + langue, à droite
+	// en-tête, à droite, sur deux rangées (police plus petite) : « Mode clair / sombre » et
+	// « Notice » en haut, la langue en dessous ; le titre garde toute sa largeur
+	ts := func(k string) int { return a.measure(a.fontSmall, T(k)) }
 	lw := 0
 	for _, n := range langNames {
-		lw = max(lw, a.measure(a.fontUI, n))
+		lw = max(lw, a.measure(a.fontSmall, n))
 	}
 	lw += 10 + 20 + 8 + 10 + 10 + 16 // marges, drapeau, chevron et une petite réserve
-	hw := max(150, tw("btn.help")+36)
-	hy := (m.hdr - m.btn) / 2
-	combo(idLang, x1-lw, hy, lw, m.btn, 300)
-	mv(idHelp, x1-lw-8-hw, hy, hw, m.btn)
-	a.titleRight = x1 - lw - 8 - hw - 16
+	hw := ts("btn.help") + 28
+	thw := max(ts("btn.themeLight"), ts("btn.themeDark")) + 16 + 28 // icône soleil / lune
+	hb := min(28, (m.hdr-12)/2)
+	hy := (m.hdr - 2*hb - 4) / 2
+	mv(idHelp, x1-hw, hy, hw, hb)
+	mv(idTheme, x1-hw-6-thw, hy, thw, hb)
+	combo(idLang, x1-lw, hy+hb+4, lw, hb, 300)
+	a.titleRight = x1 - max(hw+6+thw, lw) - 16
 
 	a.cards = a.cards[:0]
 	ch := m.cards()
@@ -810,6 +822,9 @@ func paintBuffered(hwnd uintptr, draw func(hdc uintptr)) {
 // paintHeader : bandeau commun (fenêtre principale et notice) : dégradé bleu nuit comme
 // l'Analyseur Wi-Fi, logo VAP, titre, sous-titre éventuel, filet bleu de 3 px.
 func (a *app) paintHeader(hdc uintptr, width int32, hdr, logo int, title, sub string, titleRight int) {
+	saved := curPal
+	usePalette(&darkPal) // bandeau bleu nuit dans les deux thèmes (logo VAP blanc)
+	defer usePalette(saved)
 	H := int32(a.s(hdr))
 	hGradient(hdc, rect{0, 0, width * 6 / 10, H}, colEnteteDebut, colFond)
 	fillBox(hdc, width*6/10, 0, width, H, colFond)
@@ -894,17 +909,23 @@ func (a *app) onNotify(lParam uintptr) (uintptr, bool) {
 	}
 	id := int(nm.hdr.idFrom)
 	switch id {
-	case idHelp, idDatBrowse, idBkBrowse, idOpen, idConvert, idQuit, idDonate, idSuggest, idRecursive, idAir, idTop:
+	case idHelp, idTheme, idDatBrowse, idBkBrowse, idOpen, idConvert, idQuit, idDonate, idSuggest, idRecursive, idAir, idTop:
 	default:
 		return 0, false
 	}
 	if nm.drawStage != cddsPrepaint {
 		return cdrfDoDefault, true
 	}
-	back := colPanneau
-	if id == idHelp {
-		back = colFond
+	if id == idHelp || id == idTheme {
+		withPalette(&darkPal, func() {
+			a.drawButton(nm, btnNormal, colFond)
+			if id == idTheme {
+				a.drawThemeIcon(nm)
+			}
+		})
+		return cdrfSkipDef, true
 	}
+	back := colPanneau
 	switch id {
 	case idRecursive, idAir, idTop:
 		a.drawCheck(nm, back, id == idAir)
@@ -1287,6 +1308,8 @@ func (a *app) onCommand(id int, code int) {
 		a.openOut()
 	case idHelp:
 		a.showHelp()
+	case idTheme:
+		a.toggleTheme()
 	case idQuit: // comme la croix : sans effet pendant une conversion
 		pPostMessageW.Call(a.hwnd, wmClose, 0, 0)
 	case idDonate:
@@ -1417,6 +1440,7 @@ func main() {
 	icc := initCC{8, 0x0000FFFF}
 	pInitCommonControlsEx.Call(uintptr(unsafe.Pointer(&icc)))
 	initTheme()
+	setPaletteDark(loadTheme()) // sombre sans choix enregistré
 
 	a := A
 	a.hInst, _, _ = pGetModuleHandleW.Call(0)

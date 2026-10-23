@@ -63,6 +63,14 @@ func init() {
 	})
 	afterShow = func() {
 		a := A
+		// thème imposé pour la série de captures, sans l'enregistrer
+		if os.Getenv("VAP_CAPTURE_THEME") == "clair" {
+			setPaletteDark(false)
+			a.applyTheme()
+		} else if os.Getenv("VAP_CAPTURE_THEME") == "sombre" {
+			setPaletteDark(true)
+			a.applyTheme()
+		}
 		langs := []Lang{}
 		for _, c := range strings.Split(os.Getenv("VAP_CAPTURE_LANGUES"), ",") {
 			if l, ok := langFromCode(strings.TrimSpace(c)); ok {
@@ -161,6 +169,9 @@ func init() {
 			func() { dialogShot("7-erreur"); msgBox(a.hwnd, T("err.convFailed")+"exemple\nsur plusieurs lignes"+Tf("ask.sendReport", `C:\Exemple\rapport d'erreur.txt`)+T("rep.privacy"), T("msg.title"), mbYesNo|mbIconError) },
 			func() { dialogShot("8-suggestion"); msgBox(a.hwnd, suggestText(`C:\Exemple\rapport d'erreur.txt`), T("msg.title"), mbOK|mbIconInfo) },
 		)
+		if os.Getenv("VAP_CAPTURE_BASCULE") != "" {
+			capSteps = append(capSteps, a.toggleSteps()...)
+		}
 		// clavier : ordre de tabulation, puis Entrée et Échap dans les deux questions
 		capSteps = append(capSteps, func() { pSetFocus.Call(a.ctl[idHelp]); kb("Tabulation depuis « Notice » :") })
 		for i := 0; i < 22; i++ {
@@ -214,7 +225,8 @@ func ctlName(id int) string {
 	names := map[int]string{idHelp: "Notice", idLang: "Langue", idDatEdit: "Dossier .DAT", idDatBrowse: "Parcourir 1",
 		idRecursive: "Sous-dossiers", idBkEdit: "Sauvegarde", idBkBrowse: "Parcourir 2", idMachine: "Machine",
 		idFolderName: "Nom du dossier", idAir: "Air", idSort: "Tri", idTop: "En tête", idLaser: "Source laser",
-		idOpen: "Ouvrir le dossier", idConvert: "Convertir", idQuit: "Quitter", idDonate: "Don", idSuggest: "Suggestion"}
+		idOpen: "Ouvrir le dossier", idConvert: "Convertir", idQuit: "Quitter", idDonate: "Don", idSuggest: "Suggestion",
+		idTheme: "Mode clair / sombre"}
 	if n, ok := names[id]; ok {
 		return n
 	}
@@ -231,6 +243,11 @@ func (a *app) checkFit(label string) {
 	for _, id := range []int{idHelp, idDatBrowse, idBkBrowse, idOpen, idConvert, idQuit, idDonate, idSuggest} {
 		if need := int32(a.measurePx(fontOf(id), text(id))) + int32(a.s(12)); need > w(id) {
 			bad = append(bad, fmt.Sprintf("bouton %s : %d > %d", ctlName(id), need, w(id)))
+		}
+	}
+	for _, k := range []string{"btn.themeLight", "btn.themeDark"} { // les deux libellés, icône comprise
+		if need := int32(a.measurePx(fontOf(idTheme), T(k))) + int32(a.s(12+14+7)); need > w(idTheme) {
+			bad = append(bad, fmt.Sprintf("bouton %q : %d > %d", T(k), need, w(idTheme)))
 		}
 	}
 	for _, id := range []int{idLblMachine, idLblFolder, idLblSort, idLblLaser, idDatInfo} {
@@ -278,7 +295,7 @@ func (a *app) checkFit(label string) {
 			bad = append(bad, fmt.Sprintf("contrôle %s hors fenêtre", ctlName(id)))
 		}
 	}
-	ids := []int{idHelp, idLang, idDatEdit, idDatBrowse, idRecursive, idDatInfo, idBkEdit, idBkBrowse, idLblMachine, idMachine,
+	ids := []int{idHelp, idTheme, idLang, idDatEdit, idDatBrowse, idRecursive, idDatInfo, idBkEdit, idBkBrowse, idLblMachine, idMachine,
 		idLblFolder, idFolderName, idAir, idLblSort, idSort, idTop, idLblLaser, idLaser, idLog, idOpen, idConvert, idQuit, idDonate, idSuggest, idUpdate}
 	vis := func(id int) (rect, bool) {
 		r := childRect(a.hwnd, a.ctl[id])
@@ -367,4 +384,94 @@ func shot(hwnd uintptr, name string) {
 	}
 	png.Encode(f, img)
 	f.Close()
+}
+
+// uiState : tout ce qu'une bascule de thème ne doit pas changer.
+func (a *app) uiState() string {
+	var b strings.Builder
+	for _, id := range []int{idDatEdit, idBkEdit, idFolderName, idDatInfo} {
+		fmt.Fprintf(&b, "%s=%q;", ctlName(id), getText(a.ctl[id]))
+	}
+	for _, id := range []int{idMachine, idSort, idLaser, idLang} {
+		fmt.Fprintf(&b, "%s=%d;", ctlName(id), int32(send(a.ctl[id], cbGetCurSel, 0, 0)))
+	}
+	for _, id := range []int{idRecursive, idAir, idTop} {
+		fmt.Fprintf(&b, "%s=%v;", ctlName(id), a.checked(id))
+	}
+	for _, id := range []int{idOpen, idConvert, idDatEdit, idAir} {
+		fmt.Fprintf(&b, "%s actif=%v;", ctlName(id), isEnabled(a.ctl[id]))
+	}
+	fmt.Fprintf(&b, "progression=%d;journal=%q;entrées=%d", a.progress, a.logText(), len(a.logEntries))
+	return b.String()
+}
+
+// toggleSteps : bascules répétées (sans enregistrer le choix) avec fenêtre remplie, notice
+// ouverte et contrôles verrouillés ; l'état doit rester identique, le journal recoloré.
+func (a *app) toggleSteps() []func() {
+	var before string
+	var helpPos point
+	flip := func() { setPaletteDark(!isDark); a.applyTheme() }
+	check := func(label string) func() {
+		return func() {
+			if after := a.uiState(); after == before {
+				kb(label + " : état inchangé (champs, options, journal, progression)")
+			} else {
+				kb(label + " : ÉTAT MODIFIÉ\n  avant " + before + "\n  après " + after)
+			}
+		}
+	}
+	steps := []func(){
+		func() {
+			kb("Bascules de thème :")
+			a.fillDemo(`C:\Exemple\Réglages Epilog\Helix 75 watts`, "Helix")
+			send(a.ctl[idTop], bmSetCheck, 0, 0)
+			send(a.ctl[idSort], cbSetCurSel, 2, 0)
+			before = a.uiState()
+		},
+	}
+	for i := 0; i < 10; i++ {
+		steps = append(steps, flip)
+	}
+	steps = append(steps, check("10 bascules, fenêtre remplie"),
+		func() { shot(a.hwnd, "bascule-fenetre") },
+		func() { a.showHelp() },
+		func() { send(helpEdit, 0x0115, 3, 0); send(helpEdit, emGetScrollPos, 0, uintptr(unsafe.Pointer(&helpPos))) }, // une page plus bas
+	)
+	for i := 0; i < 5; i++ {
+		steps = append(steps, flip)
+	}
+	steps = append(steps,
+		func() {
+			var p point
+			send(helpEdit, emGetScrollPos, 0, uintptr(unsafe.Pointer(&p)))
+			kb(fmt.Sprintf("5 bascules, notice ouverte : position de lecture %d -> %d, notice %v", helpPos.y, p.y, map[bool]string{true: "toujours ouverte", false: "FERMÉE"}[helpHwnd != 0]))
+			shot(helpHwnd, "bascule-notice")
+		},
+		check("5 bascules, notice ouverte"),
+		func() { pPostMessageW.Call(helpHwnd, wmClose, 0, 0) },
+		func() { // comme pendant une conversion : contrôles verrouillés, curseur occupé
+			for _, id := range lockedIDs {
+				enable(a.ctl[id], false)
+			}
+			a.busy = true
+			before = a.uiState()
+		},
+	)
+	for i := 0; i < 5; i++ {
+		steps = append(steps, flip)
+	}
+	steps = append(steps,
+		func() {
+			kb(fmt.Sprintf("5 bascules, contrôles verrouillés : bouton de thème actif=%v", isEnabled(a.ctl[idTheme])))
+			shot(a.hwnd, "bascule-verrouille")
+		},
+		check("5 bascules, contrôles verrouillés"),
+		func() {
+			a.busy = false
+			for _, id := range lockedIDs {
+				enable(a.ctl[id], true)
+			}
+		},
+	)
+	return steps
 }
